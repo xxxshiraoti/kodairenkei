@@ -1,14 +1,21 @@
-# research-template
+# 避難所の最適配置
 
-## Build Environment
 
-1. install [rye](https://rye-up.com/)
-   1. install instructions: https://rye-up.com/guide/installation/
-2. enable [uv](https://github.com/astral-sh/uv) to speed up dependency resolution.
-   ```bash
-   rye config --set-bool behavior.use-uv=true
-   ```
-3. create a virtual environment
-   ```bash
-   rye sync
-   ```
+
+## 環境構築
+
+### ryeのインストール
+
+https://rye.astral.sh/guide/installation/
+
+### 仮想環境の作成
+
+```bash
+rye sync
+```
+
+## アプリケーションの起動
+
+```bash
+rye run streamlit run app.py
+```
