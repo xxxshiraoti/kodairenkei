@@ -8,10 +8,6 @@
 #   with-sources: false
 
 -e file:.
-aiohttp==3.9.5
-    # via fsspec
-aiosignal==1.3.1
-    # via aiohttp
 antlr4-python3-runtime==4.9.3
     # via hydra-core
     # via omegaconf
@@ -20,6 +16,8 @@ anyio==4.3.0
     # via jupyter-server
 appdirs==1.4.4
     # via wandb
+appnope==0.1.4
+    # via ipykernel
 argon2-cffi==23.1.0
     # via jupyter-server
 argon2-cffi-bindings==21.2.0
@@ -30,10 +28,7 @@ asttokens==2.4.1
     # via stack-data
 async-lru==2.0.4
     # via jupyterlab
-async-timeout==4.0.3
-    # via aiohttp
 attrs==23.2.0
-    # via aiohttp
     # via jsonschema
     # via referencing
 babel==2.14.0
@@ -75,20 +70,10 @@ executing==2.0.1
     # via stack-data
 fastjsonschema==2.19.1
     # via nbformat
-filelock==3.9.0
-    # via torch
-    # via triton
 fonttools==4.51.0
     # via matplotlib
 fqdn==1.5.1
     # via jsonschema
-frozenlist==1.4.1
-    # via aiohttp
-    # via aiosignal
-fsspec==2023.4.0
-    # via lightning
-    # via pytorch-lightning
-    # via torch
 gitdb==4.0.11
     # via gitpython
 gitpython==3.1.43
@@ -106,7 +91,6 @@ idna==3.4
     # via httpx
     # via jsonschema
     # via requests
-    # via yarl
 ipykernel==6.29.4
     # via jupyter
     # via jupyter-console
@@ -128,7 +112,6 @@ jinja2==3.1.2
     # via jupyterlab
     # via jupyterlab-server
     # via nbconvert
-    # via torch
 joblib==1.4.0
     # via research-template
     # via scikit-learn
@@ -184,12 +167,6 @@ jupyterlab-widgets==3.0.10
     # via ipywidgets
 kiwisolver==1.4.5
     # via matplotlib
-lightning==2.2.3
-    # via research-template
-lightning-utilities==0.11.2
-    # via lightning
-    # via pytorch-lightning
-    # via torchmetrics
 loguru==0.7.2
     # via research-template
 markupsafe==2.1.3
@@ -203,11 +180,6 @@ matplotlib-inline==0.1.7
     # via ipython
 mistune==3.0.2
     # via nbconvert
-mpmath==1.3.0
-    # via sympy
-multidict==6.0.5
-    # via aiohttp
-    # via yarl
 mypy==1.6.1
 mypy-extensions==1.0.0
     # via mypy
@@ -222,8 +194,6 @@ nbformat==5.10.4
     # via nbconvert
 nest-asyncio==1.6.0
     # via ipykernel
-networkx==3.2.1
-    # via torch
 notebook==7.1.3
     # via jupyter
 notebook-shim==0.2.4
@@ -231,15 +201,12 @@ notebook-shim==0.2.4
     # via notebook
 numpy==1.26.3
     # via contourpy
-    # via lightning
     # via matplotlib
     # via pandas
-    # via pytorch-lightning
     # via research-template
     # via scikit-learn
     # via scipy
     # via seaborn
-    # via torchmetrics
 omegaconf==2.3.0
     # via hydra-core
 overrides==7.7.0
@@ -250,14 +217,10 @@ packaging==22.0
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
-    # via lightning
-    # via lightning-utilities
     # via matplotlib
     # via nbconvert
-    # via pytorch-lightning
     # via qtconsole
     # via qtpy
-    # via torchmetrics
 pandas==2.2.2
     # via research-template
     # via seaborn
@@ -286,6 +249,8 @@ psutil==5.9.8
 ptyprocess==0.7.0
     # via pexpect
     # via terminado
+pulp==2.9.0
+    # via research-template
 pure-eval==0.2.2
     # via stack-data
 pycparser==2.22
@@ -304,15 +269,11 @@ python-dateutil==2.9.0.post0
     # via pandas
 python-json-logger==2.0.7
     # via jupyter-events
-pytorch-lightning==2.2.2
-    # via lightning
 pytz==2024.1
     # via pandas
 pyyaml==6.0.1
     # via jupyter-events
-    # via lightning
     # via omegaconf
-    # via pytorch-lightning
     # via wandb
 pyzmq==26.0.2
     # via ipykernel
@@ -329,7 +290,6 @@ referencing==0.34.0
     # via jsonschema-specifications
     # via jupyter-events
 requests==2.28.1
-    # via fsspec
     # via jupyterlab-server
     # via wandb
 rfc3339-validator==0.1.4
@@ -355,7 +315,6 @@ sentry-sdk==1.45.0
 setproctitle==1.3.3
     # via wandb
 setuptools==69.5.1
-    # via lightning-utilities
     # via wandb
 six==1.16.0
     # via asttokens
@@ -372,8 +331,6 @@ soupsieve==2.5
     # via beautifulsoup4
 stack-data==0.6.3
     # via ipython
-sympy==1.12
-    # via torch
 terminado==0.18.1
     # via jupyter-server
     # via jupyter-server-terminals
@@ -384,14 +341,6 @@ tinycss2==1.2.1
 tomli==2.0.1
     # via jupyterlab
     # via mypy
-torch==2.1.1+cu121
-    # via lightning
-    # via pytorch-lightning
-    # via research-template
-    # via torchmetrics
-torchmetrics==1.0.3
-    # via lightning
-    # via pytorch-lightning
 tornado==6.4
     # via ipykernel
     # via jupyter-client
@@ -400,8 +349,6 @@ tornado==6.4
     # via notebook
     # via terminado
 tqdm==4.64.1
-    # via lightning
-    # via pytorch-lightning
     # via research-template
 traitlets==5.14.3
     # via comm
@@ -419,19 +366,13 @@ traitlets==5.14.3
     # via nbconvert
     # via nbformat
     # via qtconsole
-triton==2.1.0
-    # via torch
 types-python-dateutil==2.9.0.20240316
     # via arrow
 typing-extensions==4.8.0
     # via anyio
     # via async-lru
     # via ipython
-    # via lightning
-    # via lightning-utilities
     # via mypy
-    # via pytorch-lightning
-    # via torch
 tzdata==2024.1
     # via pandas
 uri-template==1.3.0
@@ -451,5 +392,3 @@ websocket-client==1.7.0
     # via jupyter-server
 widgetsnbextension==4.0.10
     # via ipywidgets
-yarl==1.9.4
-    # via aiohttp
