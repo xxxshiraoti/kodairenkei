@@ -1,6 +1,6 @@
 # 避難所の最適配置
 
-[streamlit-app-2024-07-25-22-07-22]()
+[streamlit-app-2024-07-25-22-07-22.webm](https://github.com/user-attachments/assets/af473515-833b-4517-9ee2-6cafcae0f945)
 
 ## 環境構築
 
