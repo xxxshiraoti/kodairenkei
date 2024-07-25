@@ -19,3 +19,6 @@ rye sync
 ```bash
 rye run streamlit run app.py
 ```
+## Google Colabでの実行
+
+https://colab.research.google.com/drive/13lI8phdexhRvRNzSCFY0NiGAR41tUZCC?usp=sharing
