@@ -136,8 +136,7 @@ def optimize_shelter_installation(
             # 距離制約
             model += y[i][j] <= z[i][j]
             model += z[i][j] <= x[i]
-            if d[i][j] > D:
-                model += z[i][j] == 0
+            model += d[i][j] * z[i][j] <= D
 
     # 避難所の収容人数制約
     for i in range(n):
@@ -226,8 +225,7 @@ def optimize_evacuation_time(
             # 距離制約
             model += y[i][j] <= z[i][j]
             model += z[i][j] <= x[i]
-            if d[i][j] > D:
-                model += z[i][j] == 0
+            model += z[i][j] * d[i][j] <= D
 
     # 避難所の収容人数制約
     for i in range(n):
@@ -463,15 +461,14 @@ def main() -> None:
             st.markdown(desc)
 
         if st.button("最適化実行"):
-            if model_option == "避難所の設置数最小化":
-                x, y = optimize_shelter_installation(n, m, D, group_populations, c, d)
-                n_shelters = int(sum([pulp.value(x[i]) for i in range(len(shelter_coords))]))
-                title = f"避難所の設置数最小化の結果 (避難所数: {n_shelters})"
-                st.write("避難所の設置数最小化の結果")
-            elif model_option == "避難時間最小化":
-                x, y, T = optimize_evacuation_time(n, m, D, group_populations, c, d)
-                title = f"避難時間最小化の結果 (最大避難時間: {T})"
-                st.write("避難時間最小化の結果")
+            with st.spinner("最適化中..."):
+                if model_option == "避難所の設置数最小化":
+                    x, y = optimize_shelter_installation(n, m, D, group_populations, c, d)
+                    n_shelters = int(sum([pulp.value(x[i]) for i in range(len(shelter_coords))]))
+                    title = f"避難所の設置数最小化の結果 (避難所数: {n_shelters})"
+                elif model_option == "避難時間最小化":
+                    x, y, T = optimize_evacuation_time(n, m, D, group_populations, c, d)
+                    title = f"避難時間最小化の結果 (最大避難時間: {T})"
             fig2 = visualize_evacuation_plan(
                 shelter_coords, group_coords, group_populations, x, y, c, title=title
             )
