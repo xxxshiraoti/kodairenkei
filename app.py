@@ -67,7 +67,7 @@ DESC_OPTIMIZE_SHELTER_INSTALLATION = """
     $$
     \\text{Minimize} \\quad \\sum_{i=1}^{n} x_i
     $$
-    
+
     #### 制約条件:
     1. **避難者グループの割り当て制約**:
     各避難者グループはちょうど一つの避難所に割り当てられる。
