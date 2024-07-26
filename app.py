@@ -337,8 +337,9 @@ def visualize_evacuation_plan(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
                 c="red",
-                s=200,
-                label=f"設置した避難所 {i}" if i == 0 else "",
+                s=100,
+                label="設置した避難所" if i == 0 else "",
+                alpha=0.6,
             )
             ax.text(shelter_coords[i, 0], shelter_coords[i, 1], f"{c[i]}", fontsize=9, ha="right")
         else:
@@ -346,8 +347,9 @@ def visualize_evacuation_plan(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
                 c="black",
-                s=200,
+                s=100,
                 label="未選択の避難所" if i == 0 else "",
+                alpha=0.6,
             )
 
     for j in range(len(group_coords)):
@@ -357,6 +359,7 @@ def visualize_evacuation_plan(
             c="blue",
             s=group_populations[j] * 10,
             label="避難者グループ" if j == 0 else "",
+            alpha=0.6,
         )
         ax.text(
             group_coords[j, 0],
