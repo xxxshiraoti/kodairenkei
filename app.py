@@ -336,7 +336,7 @@ def visualize_evacuation_plan(
             ax.scatter(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
-                c="blue",
+                c="red",
                 s=200,
                 label=f"設置した避難所 {i}" if i == 0 else "",
             )
@@ -354,7 +354,7 @@ def visualize_evacuation_plan(
         ax.scatter(
             group_coords[j, 0],
             group_coords[j, 1],
-            c="red",
+            c="blue",
             s=group_populations[j] * 10,
             label="避難者グループ" if j == 0 else "",
         )
