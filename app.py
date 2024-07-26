@@ -101,7 +101,7 @@ DESC_OPTIMIZE_SHELTER_INSTALLATION = """
 
 def optimize_shelter_installation(
     n: int, m: int, D: int, group_populations: np.ndarray, c: np.ndarray, d: np.ndarray
-) -> tuple[dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
+) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
     """
     避難所の設置数を最小化するための最適化を行う関数。
 
@@ -147,7 +147,8 @@ def optimize_shelter_installation(
     # to dict from LpVariable
     x = {i: x[i] for i in range(n)}
     y = {(i, j): y[i][j] for i in range(n) for j in range(m)}
-    return x, y
+    status = pulp.LpStatus[model.status]
+    return status, x, y
 
 
 DESC_OPTIMIZE_EVACUATION_TIME = """
@@ -203,7 +204,7 @@ DESC_OPTIMIZE_EVACUATION_TIME = """
 
 def optimize_evacuation_time(
     n: int, m: int, D: int, group_populations: np.ndarray, c: np.ndarray, d: np.ndarray
-) -> tuple[dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable], int]:
+) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable], int]:
     model = pulp.LpProblem("Minimize_Evacuation_Time", pulp.LpMinimize)
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
     y = pulp.LpVariable.dicts(
@@ -243,7 +244,8 @@ def optimize_evacuation_time(
     x = {i: x[i] for i in range(n)}
     y = {(i, j): y[i][j] for i in range(n) for j in range(m)}
     T = int(T.value())
-    return x, y, T
+    status = pulp.LpStatus[model.status]
+    return status, x, y, T
 
 
 DESC_REGISTRY = {
@@ -472,17 +474,20 @@ def main() -> None:
                 st.markdown(desc)
             with st.spinner("最適化中..."):
                 if model_option == "避難所の設置数最小化":
-                    x, y = optimize_shelter_installation(n, m, D, group_populations, c, d)
+                    status, x, y = optimize_shelter_installation(n, m, D, group_populations, c, d)
                     n_shelters = int(sum([pulp.value(x[i]) for i in range(len(shelter_coords))]))
                     title = f"避難所の設置数最小化の結果 (避難所数: {n_shelters})"
                 elif model_option == "避難時間最小化":
-                    x, y, T = optimize_evacuation_time(n, m, D, group_populations, c, d)
+                    status, x, y, T = optimize_evacuation_time(n, m, D, group_populations, c, d)
                     title = f"避難時間最小化の結果 (最大避難時間: {T})"
             fig2 = visualize_evacuation_plan(
                 shelter_coords, group_coords, group_populations, x, y, c, title=title
             )
+            st.session_state["status"] = status
             st.session_state["opt_fig"] = fig2
 
+    if "status" in st.session_state:
+        st.write(f"最適化ステータス: {st.session_state['status']}")
     if "opt_fig" in st.session_state:
         st.pyplot(st.session_state["opt_fig"])
 
