@@ -149,6 +149,7 @@ def optimize_shelter_installation(
     y = {(i, j): y[i][j] for i in range(n) for j in range(m)}
     return x, y
 
+
 DESC_OPTIMIZE_EVACUATION_TIME = """
     ### 避難時間の最大値最小化モデルの定式化
 
@@ -209,7 +210,7 @@ def optimize_evacuation_time(
         "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
     )
     z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
-    T = pulp.LpVariable("T", lowBound=0, cat=pulp.LpContinuous) # 最大避難時間
+    T = pulp.LpVariable("T", lowBound=0, cat=pulp.LpContinuous)  # 最大避難時間
 
     # 目的関数
     model += T
@@ -230,7 +231,7 @@ def optimize_evacuation_time(
     # 避難所の収容人数制約
     for i in range(n):
         model += pulp.lpSum(y[i][j] * group_populations[j] for j in range(m)) <= c[i]
-    
+
     # 最大避難時間制約
     for i in range(n):
         for j in range(m):
@@ -244,10 +245,12 @@ def optimize_evacuation_time(
     T = int(T.value())
     return x, y, T
 
+
 DESC_REGISTRY = {
     "避難所の設置数最小化": DESC_OPTIMIZE_SHELTER_INSTALLATION,
     "避難時間最小化": DESC_OPTIMIZE_EVACUATION_TIME,
 }
+
 
 def visualize_population_data(
     shelter_coords: np.ndarray,
