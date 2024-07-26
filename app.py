@@ -436,7 +436,9 @@ def main() -> None:
     st.title("避難所配置問題の最適化")
 
     # パラメータ入力
-    n, m, max_capacity, max_distance, D = get_parameters()
+    with st.sidebar:
+        st.write("パラメータ設定")
+        n, m, max_capacity, max_distance, D = get_parameters()
 
     if st.button("データ生成"):
         shelter_coords, group_coords, group_populations, c, d = generate_data(
@@ -449,18 +451,19 @@ def main() -> None:
     if "data_fig" in st.session_state:
         st.pyplot(st.session_state["data_fig"])
 
-    if "data" in st.session_state:
-        shelter_coords, group_coords, group_populations, c, d = st.session_state["data"]
-
+    with st.sidebar:
         st.write("最適化モデルの選択")
         model_option = st.selectbox(
             "最適化モデルを選択してください", ["避難所の設置数最小化", "避難時間最小化"]
         )
-        with st.expander("最適化問題の詳細"):
-            desc = DESC_REGISTRY[str(model_option)]
-            st.markdown(desc)
+
+    if "data" in st.session_state:
+        shelter_coords, group_coords, group_populations, c, d = st.session_state["data"]
 
         if st.button("最適化実行"):
+            with st.expander("最適化問題の詳細"):
+                desc = DESC_REGISTRY[str(model_option)]
+                st.markdown(desc)
             with st.spinner("最適化中..."):
                 if model_option == "避難所の設置数最小化":
                     x, y = optimize_shelter_installation(n, m, D, group_populations, c, d)
