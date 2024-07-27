@@ -180,25 +180,39 @@ DESC_OPTIMIZE_EVACUATION_TIME = """
     #### 制約条件
     1. **避難者グループの割り当て制約**:
         各避難者グループはちょうど一つの避難所に割り当てられる。
-        $$ \\sum_{i=1}^{n} y_{ij} = 1 \\quad \\forall j \\in \\{1, 2, \\ldots, m\\} $$
+        $$
+        \\sum_{i=1}^{n} y_{ij} = 1 \\quad \\forall j \\in \\{1, 2, \\ldots, m\\}
+        $$
 
     2. **避難所設置制約**:
         避難者グループが避難所に割り当てられる場合、その避難所が設置されている必要がある。
-        $$ y_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\} $$
+        $$
+        y_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+        $$
 
     3. **距離制約**:
         避難者グループ $$ j $$ が避難所 $$ i $$ に割り当てられる場合、その距離が最大距離 $$ D $$ を超えないようにする。
-        $$ y_{ij} \\leq z_{ij} \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\} $$
-        $$ z_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\} $$
-        $$ d_{ij} \\cdot z_{ij} \\leq D \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\} $$
+        $$
+        y_{ij} \\leq z_{ij} \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+        $$
+        $$
+        z_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+        $$
+        $$
+        d_{ij} \\cdot z_{ij} \\leq D \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+        $$
 
     4. **避難所の収容人数制約**:
         避難所の収容人数が収容人数上限を超えないようにする。
-        $$ \\sum_{j=1}^{m} y_{ij} \\cdot p_j \\leq c_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\} $$
+        $$
+        \\sum_{j=1}^{m} y_{ij} \\cdot p_j \\leq c_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}
+        $$
 
     5. **最大避難時間制約**:
         各避難者グループの避難時間が最大避難時間 $$ T $$ を超えないようにする。
-        $$ z_{ij} \\cdot d_{ij} \\leq T \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\} $$
+        $$
+        z_{ij} \\cdot d_{ij} \\leq T \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+        $$
     """
 
 
