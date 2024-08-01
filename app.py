@@ -310,38 +310,38 @@ DESC_MAXIMIZE_SATISFACTION = """
     #### 目的関数
     全体の利益を最大化する。
     $$
-    \\text{Maximize} \\quad \\sum_{j \\in J} \\sum_{i \\in I} \frac{p_j y_{ij} x_i}{d_{ij}}
+    \\text{Maximize} \\quad \\sum_{j \\in J} \\sum_{i \\in I} \\frac{p_j y_{ij} x_i}{d_{ij}}
     $$
 
     #### 制約条件
     1. **避難者グループの割り当て制約**:
         各避難者グループは1つ以下の避難所に割り当てられる。
         $$
-        \\sum_{i \\in I} y_{ij} \\leq 1 \\quad \forall j \\in J
+        \\sum_{i \\in I} y_{ij} \\leq 1 \\quad \\forall j \\in J
         $$
 
     2. **避難所設置制約**:
         避難者グループが避難所に割り当てられる場合、その避難所が設置されている必要がある。
         $$
-        y_{ij} \\leq x_i \\quad \forall i \\in I, \forall j \\in J
+        y_{ij} \\leq x_i \\quad \\forall i \\in I, \\forall j \\in J
         $$
 
     3. **避難所の収容人数制約**:
         避難所の収容人数が収容人数上限を超えないようにする。
         $$
-        \\sum_{j \\in J} y_{ij} p_j \\leq c_i \\quad \forall i \\in I
+        \\sum_{j \\in J} y_{ij} p_j \\leq c_i \\quad \\forall i \\in I
         $$
 
     4. **割り当て可能性制約**:
         避難者グループ $$ j $$ が避難所 $$ i $$ に割り当てられる場合、その避難所が設置されている必要がある。
         $$
-        y_{ij} \\leq z_{ij} \\quad \forall i \\in I, \forall j \\in J
+        y_{ij} \\leq z_{ij} \\quad \\forall i \\in I, \\forall j \\in J
         $$
         $$
-        z_{ij} \\leq x_i \\quad \forall i \\in I, \forall j \\in J
+        z_{ij} \\leq x_i \\quad \\forall i \\in I, \\forall j \\in J
         $$
         $$
-        d_{ij} z_{ij} \\leq D \\quad \forall i \\in I, \forall j \\in J
+        d_{ij} z_{ij} \\leq D \\quad \\forall i \\in I, \\forall j \\in J
         $$
 
     5. **予算制約**:
@@ -353,13 +353,13 @@ DESC_MAXIMIZE_SATISFACTION = """
     6. **変数の範囲**:
         変数の範囲を設定する。
         $$
-        x_i \\in \\{0, 1\\} \\quad \forall i \\in I
+        x_i \\in \\{0, 1\\} \\quad \\forall i \\in I
         $$
         $$
-        y_{ij} \\in [0, 1] \\quad \forall i \\in I, \forall j \\in J
+        y_{ij} \\in [0, 1] \\quad \\forall i \\in I, \\forall j \\in J
         $$
         $$
-        z_{ij} \\in \\{0, 1\\} \\quad \forall i \\in I, \forall j \\in J
+        z_{ij} \\in \\{0, 1\\} \\quad \\forall i \\in I, \\forall j \\in J
         $$
     """
 
