@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pulp
 import streamlit as st
+from typing import Any
+from typing import Callable
 
 
 @st.cache_data
@@ -99,8 +101,19 @@ DESC_OPTIMIZE_SHELTER_INSTALLATION = """
     """
 
 
+def get_shelter_installation_parameters() -> dict[str, Any]:
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+
+    return {"D": D}
+
+
 def optimize_shelter_installation(
-    n: int, m: int, D: int, group_populations: np.ndarray, c: np.ndarray, d: np.ndarray
+    n: int,
+    m: int,
+    group_populations: np.ndarray,
+    c: np.ndarray,
+    d: np.ndarray,
+    D: int,
 ) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
     """
     避難所の設置数を最小化するための最適化を行う関数。
@@ -108,10 +121,10 @@ def optimize_shelter_installation(
     Args:
     n (int): 避難所の候補地の数。
     m (int): 避難者グループの数。
-    D (int): 避難可能な最大距離。
     group_populations (np.ndarray): 避難者グループの人口。
     c (np.ndarray): 各避難所の収容人数上限。
     d (np.ndarray): 避難者グループから避難所までの距離行列。
+    D (int): 避難可能な最大距離。
 
     Returns:
     tuple[dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]: 避難所の設置決定変数、避難者グループの割り当て変数。
@@ -152,10 +165,10 @@ def optimize_shelter_installation(
 
 
 DESC_OPTIMIZE_EVACUATION_TIME = """
-    ### 避難時間の最大値最小化モデルの定式化
+    ### 避難距離の最大値最小化モデルの定式化
 
     #### 概要
-    避難所配置問題を解く際に、全ての避難者が避難できるという条件のもとで、避難時間の最大値を最小化することを目的とする。
+    避難所配置問題を解く際に、全ての避難者が避難できるという条件のもとで、避難距離の最大値を最小化することを目的とする。
 
     #### 定数
     - $$ n $$: 避難所の候補地の数。
@@ -169,10 +182,10 @@ DESC_OPTIMIZE_EVACUATION_TIME = """
     - $$ x_i $$: 避難所 $$ i $$ が設置されるかどうかを示すバイナリ変数 (1 なら設置、0 なら未設置)。
     - $$ y_{ij} $$: 避難者グループ $$ j $$ が避難所 $$ i $$ に割り当てられる割合を示す連続変数 (0 から 1 の範囲)。
     - $$ z_{ij} $$: 避難者グループ $$ j $$ が避難所 $$ i $$ に割り当てられるかどうかを示すバイナリ変数 (1 なら割り当て、0 なら割り当てない)。
-    - $$ T $$: 最大避難時間を示す連続変数。
+    - $$ T $$: 最大避難距離を示す連続変数。
 
     #### 目的関数
-    避難時間の最大値を最小化する。
+    避難距離の最大値を最小化する。
     $$
     \\text{Minimize} \\quad T
     $$
@@ -208,16 +221,27 @@ DESC_OPTIMIZE_EVACUATION_TIME = """
         \\sum_{j=1}^{m} y_{ij} \\cdot p_j \\leq c_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}
         $$
 
-    5. **最大避難時間制約**:
-        各避難者グループの避難時間が最大避難時間 $$ T $$ を超えないようにする。
+    5. **最大避難距離制約**:
+        各避難者グループの避難距離が最大避難距離 $$ T $$ を超えないようにする。
         $$
         z_{ij} \\cdot d_{ij} \\leq T \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
         $$
     """
 
 
+def get_evacuation_time_parameters() -> dict[str, Any]:
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+
+    return {"D": D}
+
+
 def optimize_evacuation_time(
-    n: int, m: int, D: int, group_populations: np.ndarray, c: np.ndarray, d: np.ndarray
+    n: int,
+    m: int,
+    group_populations: np.ndarray,
+    c: np.ndarray,
+    d: np.ndarray,
+    D: int,
 ) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable], int]:
     model = pulp.LpProblem("Minimize_Evacuation_Time", pulp.LpMinimize)
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
@@ -225,7 +249,7 @@ def optimize_evacuation_time(
         "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
     )
     z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
-    T = pulp.LpVariable("T", lowBound=0, cat=pulp.LpContinuous)  # 最大避難時間
+    T = pulp.LpVariable("T", lowBound=0, cat=pulp.LpContinuous)  # 最大避難距離
 
     # 目的関数
     model += T
@@ -247,7 +271,7 @@ def optimize_evacuation_time(
     for i in range(n):
         model += pulp.lpSum(y[i][j] * group_populations[j] for j in range(m)) <= c[i]
 
-    # 最大避難時間制約
+    # 最大避難距離制約
     for i in range(n):
         for j in range(m):
             model += z[i][j] * d[i][j] <= T
@@ -262,9 +286,156 @@ def optimize_evacuation_time(
     return status, x, y, T
 
 
-DESC_REGISTRY = {
-    "避難所の設置数最小化": DESC_OPTIMIZE_SHELTER_INSTALLATION,
-    "避難時間最小化": DESC_OPTIMIZE_EVACUATION_TIME,
+DESC_MAXIMIZE_SATISFACTION = """
+    ### 利益の最大化モデルの定式化
+
+    #### 概要
+    このモデルでは、避難所の配置および避難者の割り当てを考慮し、全体の利益を最大化することを目的とします。
+
+    #### 定数
+    - $$ I $$: 避難所の候補地集合。
+    - $$ J $$: 避難者グループ集合。
+    - $$ D $$: 避難可能な最大距離。
+    - $$ B $$: 予算。
+    - $$ p_j $$: グループ $$ j $$ の人数。
+    - $$ c_i $$: 避難所 $$ i $$ の収容上限。
+    - $$ d_{ij} $$: 避難所 $$ i $$ とグループ $$ j $$ の間の距離。
+    - $$ f_j $$: グループ $$ j $$ の設置コスト。
+
+    #### 変数
+    - $$ x_i $$: 避難所 $$ i $$ が設置されるかどうかを示すバイナリ変数 (1 なら設置、0 なら未設置)。
+    - $$ y_{ij} $$: グループ $$ j $$ が避難所 $$ i $$ に割り当てられる割合を示す連続変数 (0 から 1 の範囲)。
+    - $$ z_{ij} $$: グループ $$ j $$ が避難所 $$ i $$ に割り当てられるかどうかを示すバイナリ変数 (1 なら割り当て、0 なら割り当てない)。
+
+    #### 目的関数
+    全体の利益を最大化する。
+    $$
+    \\text{Maximize} \\quad \\sum_{j \\in J} \\sum_{i \\in I} \frac{p_j y_{ij} x_i}{d_{ij}}
+    $$
+
+    #### 制約条件
+    1. **避難者グループの割り当て制約**:
+        各避難者グループは1つ以下の避難所に割り当てられる。
+        $$
+        \\sum_{i \\in I} y_{ij} \\leq 1 \\quad \forall j \\in J
+        $$
+
+    2. **避難所設置制約**:
+        避難者グループが避難所に割り当てられる場合、その避難所が設置されている必要がある。
+        $$
+        y_{ij} \\leq x_i \\quad \forall i \\in I, \forall j \\in J
+        $$
+
+    3. **避難所の収容人数制約**:
+        避難所の収容人数が収容人数上限を超えないようにする。
+        $$
+        \\sum_{j \\in J} y_{ij} p_j \\leq c_i \\quad \forall i \\in I
+        $$
+
+    4. **割り当て可能性制約**:
+        避難者グループ $$ j $$ が避難所 $$ i $$ に割り当てられる場合、その避難所が設置されている必要がある。
+        $$
+        y_{ij} \\leq z_{ij} \\quad \forall i \\in I, \forall j \\in J
+        $$
+        $$
+        z_{ij} \\leq x_i \\quad \forall i \\in I, \forall j \\in J
+        $$
+        $$
+        d_{ij} z_{ij} \\leq D \\quad \forall i \\in I, \forall j \\in J
+        $$
+
+    5. **予算制約**:
+        全体の設置コストが予算を超えないようにする。
+        $$
+        \\sum_{j \\in J} f_j x_j \\leq B
+        $$
+
+    6. **変数の範囲**:
+        変数の範囲を設定する。
+        $$
+        x_i \\in \\{0, 1\\} \\quad \forall i \\in I
+        $$
+        $$
+        y_{ij} \\in [0, 1] \\quad \forall i \\in I, \forall j \\in J
+        $$
+        $$
+        z_{ij} \\in \\{0, 1\\} \\quad \forall i \\in I, \forall j \\in J
+        $$
+    """
+
+
+def get_satisfaction_parameters() -> dict[str, Any]:
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    B = st.number_input("予算 (B)", min_value=1, max_value=1000, value=100)
+
+    return {"D": D, "B": B}
+
+
+def optimize_satisfaction(
+    n: int, m: int, group_populations: np.ndarray, c: np.ndarray, d: np.ndarray, D: int, B: int
+) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
+    f = np.ones(m)  # 設置コスト，とりあえず全て1
+
+    model = pulp.LpProblem("Maximize_satisfaction", pulp.LpMaximize)
+    x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
+    y = pulp.LpVariable.dicts(
+        "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
+    )
+    z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
+    l = pulp.LpVariable.dicts("l", (range(n), range(m)), cat=pulp.LpContinuous)  # noqa
+
+    # 目的関数
+    model += pulp.lpSum(
+        (group_populations[i] * l[i][j]) / d[i][j] for i in range(n) for j in range(m)
+    )
+
+    # 避難者グループの割り当て制約
+    for j in range(m):
+        model += pulp.lpSum(y[i][j] for i in range(n)) <= 1
+
+    for i in range(n):
+        for j in range(m):
+            # 避難所設置制約
+            model += y[i][j] <= x[i]
+            # 距離制約
+            model += y[i][j] <= z[i][j]
+            model += z[i][j] <= x[i]
+            model += z[i][j] * d[i][j] <= D
+
+            # l の制約
+            model += l[i][j] <= y[i][j]
+            model += l[i][j] <= x[i]
+            model += l[i][j] >= y[i][j] - (1 - x[i])
+
+    # 避難所の収容人数制約
+    for i in range(n):
+        model += pulp.lpSum(y[i][j] * group_populations[j] for j in range(m)) <= c[i]
+
+    # 予算制約
+    model += pulp.lpSum(f[j] * x[j] for j in range(n)) <= B
+
+    model.solve()
+
+    # to dict from LpVariable
+    x = {i: x[i] for i in range(n)}
+    y = {(i, j): y[i][j] for i in range(n) for j in range(m)}
+    status = pulp.LpStatus[model.status]
+    return status, x, y
+
+
+REGISTRY: dict[str, dict[str, Callable[..., dict[str, Any]] | str]] = {
+    "避難所の設置数最小化": {
+        "description": DESC_OPTIMIZE_SHELTER_INSTALLATION,
+        "param_fn": get_shelter_installation_parameters,
+    },
+    "避難距離最小化": {
+        "description": DESC_OPTIMIZE_EVACUATION_TIME,
+        "param_fn": get_evacuation_time_parameters,
+    },
+    "満足度最大化": {
+        "description": DESC_MAXIMIZE_SATISFACTION,
+        "param_fn": get_satisfaction_parameters,
+    },
 }
 
 
@@ -423,12 +594,12 @@ def set_page_config() -> None:
     )
 
 
-def get_parameters() -> tuple[int, int, int, int, int]:
+def get_parameters() -> tuple[int, int, int, int]:
     """
     パラメータを取得する関数。
 
     Returns:
-    tuple[int, int, int, int, int]: 避難所の候補地の数、避難者グループの数、各避難所の収容人数上限、各避難者グループから避難所までの距離の最大値、避難可能な最大距離。
+    tuple[int, int, int, int]: 避難所の候補地の数、避難者グループの数、各避難所の収容人数上限、各避難者グループから避難所までの距離の最大値。
     """
     n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=5)
     m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100, value=10)
@@ -441,16 +612,14 @@ def get_parameters() -> tuple[int, int, int, int, int]:
         max_value=1000,
         value=100,
     )
-    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
 
     # to int from Number
     n = int(n)
     m = int(m)
     max_capacity = int(max_capacity)
     max_distance = int(max_distance)
-    D = int(D)
 
-    return n, m, max_capacity, max_distance, D
+    return n, m, max_capacity, max_distance
 
 
 def main() -> None:
@@ -460,7 +629,7 @@ def main() -> None:
     # パラメータ入力
     with st.sidebar:
         st.write("パラメータ設定")
-        n, m, max_capacity, max_distance, D = get_parameters()
+        n, m, max_capacity, max_distance = get_parameters()
 
     if st.button("データ生成"):
         shelter_coords, group_coords, group_populations, c, d = generate_data(
@@ -475,25 +644,32 @@ def main() -> None:
 
     with st.sidebar:
         st.write("最適化モデルの選択")
-        model_option = st.selectbox(
-            "最適化モデルを選択してください", ["避難所の設置数最小化", "避難時間最小化"]
-        )
+        model_option = st.selectbox("最適化モデルを選択してください", REGISTRY.keys())
+        if model_option is not None:
+            kwargs: dict[str, Any] = REGISTRY[model_option]["param_fn"]()  # type: ignore
+            desc: str = REGISTRY[model_option]["description"]  # type: ignore
 
     if "data" in st.session_state:
         shelter_coords, group_coords, group_populations, c, d = st.session_state["data"]
 
         if st.button("最適化実行"):
             with st.expander("最適化問題の詳細"):
-                desc = DESC_REGISTRY[str(model_option)]
                 st.markdown(desc)
             with st.spinner("最適化中..."):
                 if model_option == "避難所の設置数最小化":
-                    status, x, y = optimize_shelter_installation(n, m, D, group_populations, c, d)
+                    status, x, y = optimize_shelter_installation(
+                        n, m, group_populations, c, d, **kwargs
+                    )
                     n_shelters = int(sum([pulp.value(x[i]) for i in range(len(shelter_coords))]))
                     title = f"避難所の設置数最小化の結果 (避難所数: {n_shelters})"
-                elif model_option == "避難時間最小化":
-                    status, x, y, T = optimize_evacuation_time(n, m, D, group_populations, c, d)
-                    title = f"避難時間最小化の結果 (最大避難時間: {T})"
+                elif model_option == "避難距離最小化":
+                    status, x, y, T = optimize_evacuation_time(
+                        n, m, group_populations, c, d, **kwargs
+                    )
+                    title = f"避難距離最小化の結果 (最大避難距離: {T})"
+                elif model_option == "満足度最大化":
+                    status, x, y = optimize_satisfaction(n, m, group_populations, c, d, **kwargs)
+                    title = "満足度最大化の結果"
             fig2 = visualize_evacuation_plan(
                 shelter_coords, group_coords, group_populations, x, y, c, title=title
             )
