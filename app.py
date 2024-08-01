@@ -624,7 +624,7 @@ def get_parameters() -> tuple[int, int, int, int]:
 
 def main() -> None:
     set_page_config()
-    st.title("避難所配置問題の最適化")
+    st.title("避難所配置の最適化")
 
     # パラメータ入力
     with st.sidebar:
