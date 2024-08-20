@@ -551,6 +551,141 @@ def optimize_sakaue(
     return status, x, y
 
 
+DESC_OPTIMIZE_SAKAUE_MODEL2 = """
+    ### 坂上モデル2の定式化
+
+    #### 概要:
+    全員が避難できるという条件のもとで，避難所の設置数を最小化する.
+    加えて，避難距離が小さくなるようにペナルティを与える.
+    ただし，避難所と避難者グループの間の距離が避難可能な最大距離を超えないようにする
+
+    #### 定数:
+    - $$ n $$: 避難所の候補地の数。
+    - $$ m $$: 避難者グループの数。
+    - $$ D $$: 避難可能な最大距離。
+    - $$ l_{ij} $$: 避難所 $$i$$ と避難者グループ $$j$$ の間の避難可能距離。
+    - $$ p_j $$: 避難者グループ $$j$$ の人口。
+    - $$ c_i $$: 避難所 $$i$$ の収容人数上限。
+    - $$ d_{ij} $$: 避難者グループ $$j$$ から避難所 $$i$$ までの距離。
+    - $$ \\alpha $$: ペナルティ係数.
+
+    #### 変数:
+    - $$ x_i $$: 避難所 $$i$$ が設置されるかどうかを示すバイナリ変数 (1 なら設置、0 なら未設置)。
+    - $$ y_{ij} $$: 避難者グループ $$j$$ が避難所 $$i$$ に割り当てられる割合を示す連続変数 (0 から 1 の範囲)。
+    - $$ z_{ij} $$: 避難者グループ $$j$$ が避難所 $$i$$ に割り当てられるかどうかを示すバイナリ変数 (1 なら割り当て、0 なら割り当てない)。
+
+    #### 目的関数:
+    避難所の設置数を最小化する。
+    $$
+    \\text{Minimize} \\quad \\sum_{i=1}^{n} x_i + \\alpha \\sum_{i=1}^{n} \\sum_{j=1}^{m} d_{ij} \\cdot p_{j} \\cdot y_{ij}
+    $$
+
+    #### 制約条件:
+    1. **避難者グループの割り当て制約**:
+    各避難者グループはちょうど一つの避難所に割り当てられる。
+    $$ \\sum_{i=1}^{n} y_{ij} = 1 \\quad \\forall j \\in \\{1, 2, \\ldots, m\\} $$
+
+    2. **避難所設置制約**:
+    避難者グループが避難所に割り当てられる場合、その避難所が設置されている必要がある。
+    $$
+    y_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+
+    3. **避難所の収容人数制約**:
+    避難所の収容人数が収容人数上限を超えないようにする。
+    $$
+    \\sum_{j=1}^{m} y_{ij} \\cdot p_j \\leq c_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}
+    $$
+
+    4. **距離制約**:
+    避難者グループ $$j$$ が避難所 $$i$$ に割り当てられる場合、その距離が最大距離 $$D$$ を超えないようにする。
+    $$
+    y_{ij} \\leq z_{ij} \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+    $$
+    z_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+    $$
+    d_{ij} \\cdot z_{ij} \\leq D \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+    $$
+    d_{ij} \\cdot z_{ij} \\leq l_{ij} \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    """
+
+
+def get_sakaue2_parameters() -> dict[str, Any]:
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    alpha = st.slider("ペナルティ係数", 0.0, 1.0, 0.99)
+
+    return {"D": D, "alpha": alpha}
+
+
+def optimize_sakaue2(
+    n: int,
+    m: int,
+    group_populations: np.ndarray,
+    c: np.ndarray,
+    d: np.ndarray,
+    l: np.ndarray,  # noqa
+    D: int,
+    alpha: float,
+) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
+    """
+    避難所の設置数を最小化するための最適化を行う関数。
+
+    Args:
+    n (int): 避難所の候補地の数。
+    m (int): 避難者グループの数。
+    group_populations (np.ndarray): 避難者グループの人口。
+    c (np.ndarray): 各避難所の収容人数上限。
+    d (np.ndarray): 避難者グループから避難所までの距離行列。
+    l (np.ndarray): 避難所グループから避難所までの避難可能距離。
+    D (int): 避難可能な最大距離。
+    alpha (float): 避難所の設置数と避難輸送距離の重み。
+
+    Returns:
+    tuple[dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]: 避難所の設置決定変数、避難者グループの割り当て変数。
+    """
+    model = pulp.LpProblem("Minimize_Shelter_Installation", pulp.LpMinimize)
+    x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
+    y = pulp.LpVariable.dicts(
+        "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
+    )
+    z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
+
+    # 目的関数
+    # 避難所の設置数 + 避難輸送距離の最小化
+    model += (1 - alpha) * pulp.lpSum(x[i] for i in range(n)) + alpha * pulp.lpSum(
+        d[i][j] * y[i][j] * group_populations[j] for i in range(n) for j in range(m)
+    )
+
+    # 避難者グループの割り当て制約
+    for j in range(m):
+        model += pulp.lpSum(y[i][j] for i in range(n)) == 1
+
+    for i in range(n):
+        for j in range(m):
+            # 避難所設置制約
+            model += y[i][j] <= x[i]
+            # 距離制約
+            model += y[i][j] <= z[i][j]
+            model += z[i][j] <= x[i]
+            model += d[i][j] * z[i][j] <= D
+            model += d[i][j] * z[i][j] <= l[i][j]
+
+    # 避難所の収容人数制約
+    for i in range(n):
+        model += pulp.lpSum(y[i][j] * group_populations[j] for j in range(m)) <= c[i]
+
+    model.solve()
+
+    # to dict from LpVariable
+    x = {i: x[i] for i in range(n)}
+    y = {(i, j): y[i][j] for i in range(n) for j in range(m)}
+    status = pulp.LpStatus[model.status]
+    return status, x, y
+
+
 REGISTRY: dict[str, dict[str, Callable[..., dict[str, Any]] | str]] = {
     "避難所の設置数最小化": {
         "description": DESC_OPTIMIZE_SHELTER_INSTALLATION,
@@ -565,6 +700,10 @@ REGISTRY: dict[str, dict[str, Callable[..., dict[str, Any]] | str]] = {
         "param_fn": get_satisfaction_parameters,
     },
     "坂上モデル": {"description": DESC_OPTIMIZE_SAKAUE_MODEL, "param_fn": get_sakaue_parameters},
+    "坂上モデル2": {
+        "description": DESC_OPTIMIZE_SAKAUE_MODEL2,
+        "param_fn": get_sakaue2_parameters,
+    },
 }
 
 
@@ -881,6 +1020,11 @@ def main() -> None:
                         n, m, group_populations, c=c, d=d, l=l_df.to_numpy(), **kwargs
                     )
                     title = "坂上モデルの結果"
+                elif model_option == "坂上モデル2":
+                    status, x, y = optimize_sakaue2(
+                        n, m, group_populations, c=c, d=d, l=l_df.to_numpy(), **kwargs
+                    )
+                    title = "坂上モデル2の結果"
 
             fig2 = visualize_evacuation_plan(
                 shelter_coords, group_coords, group_populations, x, y, c, title=title
