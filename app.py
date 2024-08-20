@@ -497,7 +497,7 @@ def optimize_sakaue(
     group_populations: np.ndarray,
     c: np.ndarray,
     d: np.ndarray,
-    l: np.ndarray,
+    l: np.ndarray,  # noqa
     D: int,
 ) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
     """
