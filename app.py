@@ -10,7 +10,7 @@ import pandas as pd
 
 @st.cache_data
 def generate_data(
-    n: int, m: int, max_capacity: int, max_distance: int
+    n: int, m: int, max_capacity: int, max_distance: int, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     人工データを生成する関数。
@@ -21,11 +21,12 @@ def generate_data(
     max_capacity (int): 各避難所の収容人数上限。
     max_distance (int): 各避難者グループから避難所までの距離の最大値。
     D (int): 避難可能な最大距離。
+    seed (int): 乱数のシード。
 
     Returns:
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: 避難所の座標、避難者グループの座標、避難者グループの人口、各避難所の収容人数上限、避難者グループから避難所までの距離行列。
     """
-    np.random.seed(42)
+    np.random.seed(seed)
     shelter_coords = np.random.rand(n, 2) * max_distance
 
     group_coords = np.random.rand(m, 2) * max_distance
@@ -790,15 +791,16 @@ def set_page_config() -> None:
     )
 
 
-def get_parameters() -> tuple[int, int, int, int]:
+def get_parameters() -> tuple[int, int, int, int, int]:
     """
     パラメータを取得する関数。
 
     Returns:
-    tuple[int, int, int, int]: 避難所の候補地の数、避難者グループの数、各避難所の収容人数上限、各避難者グループから避難所までの距離の最大値。
+    tuple[int, int, int, int]: seed、避難所の候補地の数、避難者グループの数、各避難所の収容人数上限、各避難者グループから避難所までの距離の最大値。
     """
-    n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=7)
-    m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100, value=10)
+    seed = st.number_input("乱数シード (seed)", min_value=0, value=42)
+    n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=5)
+    m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100, value=5)
     max_capacity = st.number_input(
         "各避難所の収容人数上限 (max_capacity)", min_value=1, max_value=1000, value=50
     )
@@ -810,12 +812,13 @@ def get_parameters() -> tuple[int, int, int, int]:
     )
 
     # to int from Number
+    seed = int(seed)
     n = int(n)
     m = int(m)
     max_capacity = int(max_capacity)
     max_distance = int(max_distance)
 
-    return n, m, max_capacity, max_distance
+    return seed, n, m, max_capacity, max_distance
 
 
 def main() -> None:
@@ -825,7 +828,7 @@ def main() -> None:
     # パラメータ入力
     with st.sidebar:
         st.write("パラメータ設定")
-        n, m, max_capacity, max_distance = get_parameters()
+        seed, n, m, max_capacity, max_distance = get_parameters()
 
         #  l_ijの設定
         st.write("避難グループから避難所までの避難可能距離")
@@ -836,7 +839,7 @@ def main() -> None:
 
     if st.button("データ生成"):
         shelter_coords, group_coords, group_populations, c, d = generate_data(
-            n, m, max_capacity, max_distance
+            n, m, max_capacity, max_distance, seed
         )
         fig1 = visualize_population_data(shelter_coords, group_coords, group_populations, c)
         st.session_state["data_fig"] = fig1
