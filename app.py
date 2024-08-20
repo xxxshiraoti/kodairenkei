@@ -5,6 +5,7 @@ import pulp
 import streamlit as st
 from typing import Any
 from typing import Callable
+import pandas as pd
 
 
 @st.cache_data
@@ -423,6 +424,132 @@ def optimize_satisfaction(
     return status, x, y
 
 
+DESC_OPTIMIZE_SAKAUE_MODEL = """
+    ### 坂上モデルの定式化
+
+    #### 概要:
+    全員が避難できるという条件のもとで，避難所の設置数を最小化する
+    ただし，避難所と避難者グループの間の距離が避難可能な最大距離を超えないようにする
+
+    #### 定数:
+    - $$ n $$: 避難所の候補地の数。
+    - $$ m $$: 避難者グループの数。
+    - $$ D $$: 避難可能な最大距離。
+    - $$ l_{ij} $$: 避難所 $$i$$ と避難者グループ $$j$$ の間の避難可能距離。
+    - $$ p_j $$: 避難者グループ $$j$$ の人口。
+    - $$ c_i $$: 避難所 $$i$$ の収容人数上限。
+    - $$ d_{ij} $$: 避難者グループ $$j$$ から避難所 $$i$$ までの距離。
+
+    #### 変数:
+    - $$ x_i $$: 避難所 $$i$$ が設置されるかどうかを示すバイナリ変数 (1 なら設置、0 なら未設置)。
+    - $$ y_{ij} $$: 避難者グループ $$j$$ が避難所 $$i$$ に割り当てられる割合を示す連続変数 (0 から 1 の範囲)。
+    - $$ z_{ij} $$: 避難者グループ $$j$$ が避難所 $$i$$ に割り当てられるかどうかを示すバイナリ変数 (1 なら割り当て、0 なら割り当てない)。
+
+    #### 目的関数:
+    避難所の設置数を最小化する。
+    $$
+    \\text{Minimize} \\quad \\sum_{i=1}^{n} x_i
+    $$
+
+    #### 制約条件:
+    1. **避難者グループの割り当て制約**:
+    各避難者グループはちょうど一つの避難所に割り当てられる。
+    $$ \\sum_{i=1}^{n} y_{ij} = 1 \\quad \\forall j \\in \\{1, 2, \\ldots, m\\} $$
+
+    2. **避難所設置制約**:
+    避難者グループが避難所に割り当てられる場合、その避難所が設置されている必要がある。
+    $$
+    y_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+
+    3. **避難所の収容人数制約**:
+    避難所の収容人数が収容人数上限を超えないようにする。
+    $$
+    \\sum_{j=1}^{m} y_{ij} \\cdot p_j \\leq c_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}
+    $$
+
+    4. **距離制約**:
+    避難者グループ $$j$$ が避難所 $$i$$ に割り当てられる場合、その距離が最大距離 $$D$$ を超えないようにする。
+    $$
+    y_{ij} \\leq z_{ij} \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+    $$
+    z_{ij} \\leq x_i \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+    $$
+    d_{ij} \\cdot z_{ij} \\leq D \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    $$
+    $$
+    d_{ij} \\cdot z_{ij} \\leq l_{ij} \\quad \\forall i \\in \\{1, 2, \\ldots, n\\}, \\forall j \\in \\{1, 2, \\ldots, m\\}
+    """
+
+
+def get_sakaue_parameters() -> dict[str, Any]:
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+
+    return {"D": D}
+
+
+def optimize_sakaue(
+    n: int,
+    m: int,
+    group_populations: np.ndarray,
+    c: np.ndarray,
+    d: np.ndarray,
+    l: np.ndarray,
+    D: int,
+) -> tuple[str, dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]:
+    """
+    避難所の設置数を最小化するための最適化を行う関数。
+
+    Args:
+    n (int): 避難所の候補地の数。
+    m (int): 避難者グループの数。
+    group_populations (np.ndarray): 避難者グループの人口。
+    c (np.ndarray): 各避難所の収容人数上限。
+    d (np.ndarray): 避難者グループから避難所までの距離行列。
+    l (np.ndarray): 避難所グループから避難所までの避難可能距離。
+    D (int): 避難可能な最大距離。
+
+    Returns:
+    tuple[dict[int, pulp.LpVariable], dict[tuple[int, int], pulp.LpVariable]]: 避難所の設置決定変数、避難者グループの割り当て変数。
+    """
+    model = pulp.LpProblem("Minimize_Shelter_Installation", pulp.LpMinimize)
+    x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
+    y = pulp.LpVariable.dicts(
+        "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
+    )
+    z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
+
+    model += pulp.lpSum(x[i] for i in range(n))
+
+    # 避難者グループの割り当て制約
+    for j in range(m):
+        model += pulp.lpSum(y[i][j] for i in range(n)) == 1
+
+    for i in range(n):
+        for j in range(m):
+            # 避難所設置制約
+            model += y[i][j] <= x[i]
+            # 距離制約
+            model += y[i][j] <= z[i][j]
+            model += z[i][j] <= x[i]
+            model += d[i][j] * z[i][j] <= D
+            model += d[i][j] * z[i][j] <= l[i][j]
+
+    # 避難所の収容人数制約
+    for i in range(n):
+        model += pulp.lpSum(y[i][j] * group_populations[j] for j in range(m)) <= c[i]
+
+    model.solve()
+
+    # to dict from LpVariable
+    x = {i: x[i] for i in range(n)}
+    y = {(i, j): y[i][j] for i in range(n) for j in range(m)}
+    status = pulp.LpStatus[model.status]
+    return status, x, y
+
+
 REGISTRY: dict[str, dict[str, Callable[..., dict[str, Any]] | str]] = {
     "避難所の設置数最小化": {
         "description": DESC_OPTIMIZE_SHELTER_INSTALLATION,
@@ -436,6 +563,7 @@ REGISTRY: dict[str, dict[str, Callable[..., dict[str, Any]] | str]] = {
         "description": DESC_MAXIMIZE_SATISFACTION,
         "param_fn": get_satisfaction_parameters,
     },
+    "坂上モデル": {"description": DESC_OPTIMIZE_SAKAUE_MODEL, "param_fn": get_sakaue_parameters},
 }
 
 
@@ -453,6 +581,7 @@ def visualize_population_data(
     group_coords (np.ndarray): 避難者グループの座標。
     group_populations (np.ndarray): 避難者グループの人口。
     c (np.ndarray): 各避難所の収容人数上限。
+    l (pd.DataFrame): 避難所グループから避難所までの避難可能距離。
 
     Returns:
     plt.Figure: 可視化された図。
@@ -463,28 +592,59 @@ def visualize_population_data(
         group_coords[:, 0],
         group_coords[:, 1],
         c="blue",
+        s=300,
         label="避難者グループ",
-        s=group_populations * 10,
         alpha=0.6,
     )
     ax.scatter(
         shelter_coords[:, 0],
         shelter_coords[:, 1],
         c="red",
+        s=300,
         label="避難所の候補地",
-        s=c * 10,
         alpha=0.6,
     )
+
     for i in range(len(group_coords)):
+        # 避難者グループ名を表示 (中央に表示)
         ax.text(
             group_coords[i, 0],
-            group_coords[i, 1],
-            f"{group_populations[i]}",
-            fontsize=9,
-            ha="right",
+            group_coords[i, 1] + 3,
+            f"避難者グループ: {i}",
+            fontsize=10,
+            horizontalalignment="center",
+            verticalalignment="bottom",
         )
+        # 避難者数を表示
+        ax.text(
+            group_coords[i, 0],
+            group_coords[i, 1] + 3,
+            f"人数: {group_populations[i]}",
+            fontsize=10,
+            horizontalalignment="center",
+            verticalalignment="top",
+        )
+
     for i in range(len(shelter_coords)):
-        ax.text(shelter_coords[i, 0], shelter_coords[i, 1], f"{c[i]}", fontsize=9, ha="right")
+        # 避難所名を表示 (中央に表示)
+        ax.text(
+            shelter_coords[i, 0],
+            shelter_coords[i, 1] - 3,
+            f"避難所: {i}",
+            fontsize=10,
+            horizontalalignment="center",
+            verticalalignment="bottom",
+        )
+        # 避難所の収容人数を表示
+        ax.text(
+            shelter_coords[i, 0],
+            shelter_coords[i, 1] - 3,
+            f"収容人数: {c[i]}",
+            fontsize=10,
+            horizontalalignment="center",
+            verticalalignment="top",
+        )
+
     ax.legend(markerscale=0.5)
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
@@ -524,19 +684,43 @@ def visualize_evacuation_plan(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
                 c="red",
-                s=100,
+                s=300,
                 label="設置した避難所" if i == 0 else "",
                 alpha=0.6,
             )
-            ax.text(shelter_coords[i, 0], shelter_coords[i, 1], f"{c[i]}", fontsize=9, ha="right")
+            # 避難所名を表示 (中央に表示)
+            ax.text(
+                shelter_coords[i, 0],
+                shelter_coords[i, 1] - 3,
+                f"避難所: {i}",
+                fontsize=10,
+                horizontalalignment="center",
+                verticalalignment="bottom",
+            )
+            # 避難所の収容人数を表示
+            ax.text(
+                shelter_coords[i, 0],
+                shelter_coords[i, 1] - 3,
+                f"収容人数: {c[i]}",
+                fontsize=10,
+                horizontalalignment="center",
+                verticalalignment="top",
+            )
         else:
             ax.scatter(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
                 c="black",
-                s=100,
-                label="未選択の避難所" if i == 0 else "",
+                s=300,
                 alpha=0.6,
+            )
+            ax.text(
+                shelter_coords[i, 0],
+                shelter_coords[i, 1],
+                f"避難所: {i} (未選択)",
+                fontsize=10,
+                horizontalalignment="center",
+                verticalalignment="center",
             )
 
     for j in range(len(group_coords)):
@@ -544,17 +728,29 @@ def visualize_evacuation_plan(
             group_coords[j, 0],
             group_coords[j, 1],
             c="blue",
-            s=group_populations[j] * 10,
+            s=300,
             label="避難者グループ" if j == 0 else "",
             alpha=0.6,
         )
+        # 避難者グループ名を表示 (中央に表示)
         ax.text(
             group_coords[j, 0],
-            group_coords[j, 1],
-            f"{group_populations[j]}",
-            fontsize=9,
-            ha="right",
+            group_coords[j, 1] - 3,
+            f"避難者グループ: {j}",
+            fontsize=10,
+            horizontalalignment="center",
+            verticalalignment="bottom",
         )
+        # 避難者グループの人数を表示
+        ax.text(
+            group_coords[j, 0],
+            group_coords[j, 1] - 3,
+            f"人数: {group_populations[j]}",
+            fontsize=10,
+            horizontalalignment="center",
+            verticalalignment="top",
+        )
+
         for i in range(len(shelter_coords)):
             if pulp.value(y[(i, j)]) > 0:
                 ax.arrow(
@@ -601,7 +797,7 @@ def get_parameters() -> tuple[int, int, int, int]:
     Returns:
     tuple[int, int, int, int]: 避難所の候補地の数、避難者グループの数、各避難所の収容人数上限、各避難者グループから避難所までの距離の最大値。
     """
-    n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=5)
+    n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=7)
     m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100, value=10)
     max_capacity = st.number_input(
         "各避難所の収容人数上限 (max_capacity)", min_value=1, max_value=1000, value=50
@@ -630,6 +826,13 @@ def main() -> None:
     with st.sidebar:
         st.write("パラメータ設定")
         n, m, max_capacity, max_distance = get_parameters()
+
+        #  l_ijの設定
+        st.write("避難グループから避難所までの避難可能距離")
+        columns = [f"グループ{j}" for j in range(m)]
+        index = [f"避難所{i}" for i in range(n)]
+        l_df = pd.DataFrame(np.full((n, m), max_distance), columns=columns, index=index)
+        l_df = st.data_editor(l_df, num_rows="fixed")
 
     if st.button("データ生成"):
         shelter_coords, group_coords, group_populations, c, d = generate_data(
@@ -670,6 +873,12 @@ def main() -> None:
                 elif model_option == "満足度最大化":
                     status, x, y = optimize_satisfaction(n, m, group_populations, c, d, **kwargs)
                     title = "満足度最大化の結果"
+                elif model_option == "坂上モデル":
+                    status, x, y = optimize_sakaue(
+                        n, m, group_populations, c=c, d=d, l=l_df.to_numpy(), **kwargs
+                    )
+                    title = "坂上モデルの結果"
+
             fig2 = visualize_evacuation_plan(
                 shelter_coords, group_coords, group_populations, x, y, c, title=title
             )
