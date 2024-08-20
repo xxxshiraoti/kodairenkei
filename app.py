@@ -615,7 +615,7 @@ DESC_OPTIMIZE_SAKAUE_MODEL2 = """
 
 def get_sakaue2_parameters() -> dict[str, Any]:
     D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
-    alpha = st.slider("ペナルティ係数", 0.0, 1.0, 0)
+    alpha = st.slider("ペナルティ係数", 0.0, 1.0, 0.0)
 
     return {"D": D, "alpha": alpha}
 
