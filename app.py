@@ -829,7 +829,7 @@ def visualize_population_data(map_info: MapInfo) -> plt.Figure:
         ax.text(
             row.geometry.x,
             row.geometry.y + plusy,
-            f"避難所グループ:{i} 避難人数:{int(row['people'])}",
+            f"避難所グループ:{j} 避難人数:{int(row['people'])}",
             fontsize=fontsize,
             color="red",
             ha="center",
