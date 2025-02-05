@@ -1,11 +1,47 @@
+from dataclasses import dataclass
+from typing import Any, Callable
+
+import geopandas as gpd
 import japanize_matplotlib  # noqa
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
+import osmnx as ox
+import pandas as pd
 import pulp
 import streamlit as st
-from typing import Any
-from typing import Callable
-import pandas as pd
+from geopandas import GeoDataFrame
+from networkx import MultiDiGraph
+from shapely.geometry import Point
+
+
+@dataclass
+class MapInfo:
+    gdf: GeoDataFrame
+    graph: MultiDiGraph
+    roads: GeoDataFrame
+    rivers: GeoDataFrame
+    evacuation_sites: GeoDataFrame
+    evacuee_gdf: GeoDataFrame
+
+    def plot_map(self) -> tuple[plt.Figure, plt.Axes]:
+        # データを可視化
+        fig, ax = plt.subplots(figsize=(13, 13))
+        # 国立市のバウンディングボックスを取得
+        minx, miny, maxx, maxy = self.gdf.total_bounds
+        rangex = abs(maxx - minx)
+        rangey = abs(maxy - miny)
+
+        # 表示範囲を国立市のバウンディングボックスにズーム
+        ax.set_xlim(minx - rangex * 0.01, maxx + rangex * 0.01)
+        ax.set_ylim(miny - rangey * 0.01, maxy + rangey * 0.01)
+        self.gdf.plot(
+            ax=ax, facecolor="none", edgecolor="black", linewidth=1, label="国立市境界"
+        )  # 国立市の境界
+        self.rivers.plot(ax=ax, color="blue", linewidth=2, label="河川")  # 河川
+        self.roads.plot(ax=ax, color="gray", linewidth=1, alpha=0.6, label="道路")  # 道路
+
+        return fig, ax
 
 
 @st.cache_data
@@ -19,32 +55,95 @@ def generate_data(
     n (int): 避難所の候補地の数。
     m (int): 避難者グループの数。
     max_capacity (int): 各避難所の収容人数上限。
-    max_distance (int): 各避難者グループから避難所までの距離の最大値。
-    D (int): 避難可能な最大距離。
+    max_distance (int): 最大距離（道路ネットワークの計算用）。
     seed (int): 乱数のシード。
 
     Returns:
-    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: 避難所の座標、避難者グループの座標、避難者グループの人口、各避難所の収容人数上限、避難者グループから避難所までの距離行列。
+    tuple[MapInfo, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        地理情報、避難所の座標（形状: (n, 2)）、避難者グループの座標（形状: (m, 2)）、避難者グループの人口（形状: (m,)）、各避難所の収容人数上限（形状: (n,)）、避難者グループから避難所までの距離行列（形状: (n, m)）。
     """
     np.random.seed(seed)
-    shelter_coords = np.random.rand(n, 2) * max_distance
 
-    group_coords = np.random.rand(m, 2) * max_distance
-    mean_population = [10, 20]
-    std_dev_population = [5, 10]
-    weights_population = [0.5, 0.5]
+    # 国立市の行政境界を取得
+    place_name = "国立市, 東京都, 日本"
+    gdf = ox.geocode_to_gdf(place_name)
 
-    group_populations = []
-    for _ in range(m):
-        component = np.random.choice(len(weights_population), p=weights_population)
-        population = np.random.normal(mean_population[component], std_dev_population[component])
-        group_populations.append(max(1, int(population)))
+    # 道路ネットワークを取得（徒歩移動を考慮）
+    graph = ox.graph_from_place(place_name, network_type="walk")
+    roads = ox.graph_to_gdfs(graph, nodes=False, edges=True)
+    # 川（河川）を取得
+    river_tags = {"waterway": ["river", "stream", "canal"]}
+    rivers = ox.features_from_place(place_name, river_tags)
 
-    group_populations = np.array(group_populations)
-    c = np.random.randint(30, max_capacity + 1, size=n)
-    d = np.linalg.norm(shelter_coords[:, np.newaxis, :] - group_coords[np.newaxis, :, :], axis=2)
+    # 避難所候補の取得（学校、公民館、体育館、市役所）
+    tags = {
+        "amenity": ["school", "townhall", "community_centre"],  # 学校、公民館、市役所
+        # "leisure": "sports_centre",  # 体育館
+    }
+    evacuation_sites = ox.features_from_place(place_name, tags)
+    evacuation_sites = evacuation_sites[["geometry"]].dropna()
+    evacuation_sites = evacuation_sites[
+        evacuation_sites.geometry.type.isin(["Point", "Polygon", "MultiPolygon"])
+    ]
+    evacuation_sites["geometry"] = evacuation_sites["geometry"].centroid
+    evacuation_sites["latitude"] = evacuation_sites.geometry.y
+    evacuation_sites["longitude"] = evacuation_sites.geometry.x
+    evacuation_sites = evacuation_sites.sample(n=min(n, len(evacuation_sites)), random_state=seed)
 
-    return shelter_coords, group_coords, group_populations, c, d
+    shelter_coords = np.array([[g.x, g.y] for g in evacuation_sites.geometry])
+    shelter_capacities = np.random.randint(10, max_capacity, size=len(shelter_coords))
+    evacuation_sites["capacity"] = shelter_capacities
+
+    # 避難者グループの位置をランダムに生成（国立市の範囲内）
+    evacuee_points = []
+    while len(evacuee_points) < m:
+        p = Point(
+            np.random.uniform(gdf.total_bounds[0], gdf.total_bounds[2]),
+            np.random.uniform(gdf.total_bounds[1], gdf.total_bounds[3]),
+        )
+        if gdf.contains(p).any():
+            evacuee_points.append(p)
+
+    evacuee_coords = np.array([[p.x, p.y] for p in evacuee_points])
+    evacuee_populations = np.random.randint(5, 50, size=m)
+    evacuee_groups = pd.DataFrame(
+        {
+            "latitude": evacuee_coords[:, 1],
+            "longitude": evacuee_coords[:, 0],
+            "people": evacuee_populations,
+        }
+    )
+    evacuee_gdf = gpd.GeoDataFrame(
+        evacuee_groups,
+        geometry=gpd.points_from_xy(evacuee_groups.longitude, evacuee_groups.latitude),
+    )
+
+    map_info = MapInfo(
+        gdf, graph, roads, rivers, evacuation_sites=evacuation_sites, evacuee_gdf=evacuee_gdf
+    )
+
+    # 避難者グループと避難所の距離行列を計算（道路ネットワークを利用）
+    distance_matrix = np.full((m, n), 1e7)
+
+    for i, evacuee in enumerate(evacuee_coords):
+        evacuee_node = ox.distance.nearest_nodes(graph, evacuee[0], evacuee[1])
+        for j, shelter in enumerate(shelter_coords):
+            shelter_node = ox.distance.nearest_nodes(graph, shelter[0], shelter[1])
+            try:
+                dist = nx.shortest_path_length(graph, evacuee_node, shelter_node, weight="length")
+                if dist <= max_distance:
+                    distance_matrix[i, j] = dist
+            except nx.NetworkXNoPath:
+                continue  # 経路がない場合はそのまま無限大（∞）
+
+    return (
+        map_info,
+        shelter_coords,
+        evacuee_coords,
+        evacuee_populations,
+        shelter_capacities,
+        distance_matrix.T,
+    )
 
 
 DESC_OPTIMIZE_SHELTER_INSTALLATION = """
@@ -104,7 +203,7 @@ DESC_OPTIMIZE_SHELTER_INSTALLATION = """
 
 
 def get_shelter_installation_parameters() -> dict[str, Any]:
-    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1000, max_value=10000, value=3000)
 
     return {"D": D}
 
@@ -232,7 +331,7 @@ DESC_OPTIMIZE_EVACUATION_TIME = """
 
 
 def get_evacuation_time_parameters() -> dict[str, Any]:
-    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1000, max_value=10000, value=3000)
 
     return {"D": D}
 
@@ -367,7 +466,7 @@ DESC_MAXIMIZE_SATISFACTION = """
 
 
 def get_satisfaction_parameters() -> dict[str, Any]:
-    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1000, max_value=10000, value=3000)
     B = st.number_input("予算 (B)", min_value=1, max_value=1000, value=100)
 
     return {"D": D, "B": B}
@@ -486,7 +585,7 @@ DESC_OPTIMIZE_SAKAUE_MODEL = """
 
 
 def get_sakaue_parameters() -> dict[str, Any]:
-    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1000, max_value=10000, value=3000)
 
     return {"D": D}
 
@@ -614,7 +713,7 @@ DESC_OPTIMIZE_SAKAUE_MODEL2 = """
 
 
 def get_sakaue2_parameters() -> dict[str, Any]:
-    D = st.number_input("避難可能な最大距離 (D)", min_value=1, max_value=1000, value=50)
+    D = st.number_input("避難可能な最大距離 (D)", min_value=1000, max_value=10000, value=3000)
     alpha = st.slider("ペナルティ係数", 0.0, 1.0, 0.0)
 
     return {"D": D, "alpha": alpha}
@@ -707,92 +806,42 @@ REGISTRY: dict[str, dict[str, Callable[..., dict[str, Any]] | str]] = {
 }
 
 
-def visualize_population_data(
-    shelter_coords: np.ndarray,
-    group_coords: np.ndarray,
-    group_populations: np.ndarray,
-    c: np.ndarray,
-) -> plt.Figure:
-    """
-    人口データを可視化する関数。
+def visualize_population_data(map_info: MapInfo) -> plt.Figure:
+    fig, ax = map_info.plot_map()
+    map_info.evacuation_sites.plot(ax=ax, color="green", markersize=40, label="避難所候補地")
+    map_info.evacuee_gdf.plot(ax=ax, color="red", markersize=30, label="避難者グループ")
 
-    Args:
-    shelter_coords (np.ndarray): 避難所の座標。
-    group_coords (np.ndarray): 避難者グループの座標。
-    group_populations (np.ndarray): 避難者グループの人口。
-    c (np.ndarray): 各避難所の収容人数上限。
-    l (pd.DataFrame): 避難所グループから避難所までの避難可能距離。
-
-    Returns:
-    plt.Figure: 可視化された図。
-    """
-    ax: plt.Axes  # type: ignore
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.scatter(
-        group_coords[:, 0],
-        group_coords[:, 1],
-        c="blue",
-        s=300,
-        label="避難者グループ",
-        alpha=0.6,
-    )
-    ax.scatter(
-        shelter_coords[:, 0],
-        shelter_coords[:, 1],
-        c="red",
-        s=300,
-        label="避難所の候補地",
-        alpha=0.6,
-    )
-
-    for i in range(len(group_coords)):
-        # 避難者グループ名を表示 (中央に表示)
+    # 避難所候補地の数を表示
+    fontsize = 5
+    plusy = 0.0002
+    for i, (idx, row) in enumerate(map_info.evacuation_sites.iterrows()):
         ax.text(
-            group_coords[i, 0],
-            group_coords[i, 1] + 3,
-            f"避難者グループ: {i}",
-            fontsize=10,
-            horizontalalignment="center",
-            verticalalignment="bottom",
-        )
-        # 避難者数を表示
-        ax.text(
-            group_coords[i, 0],
-            group_coords[i, 1] + 3,
-            f"人数: {group_populations[i]}",
-            fontsize=10,
-            horizontalalignment="center",
-            verticalalignment="top",
+            row.geometry.x,
+            row.geometry.y + plusy,
+            f"避難所：{i} 収容可能人数:{int(row['capacity'])}",
+            fontsize=fontsize,
+            color="blue",
+            ha="center",
         )
 
-    for i in range(len(shelter_coords)):
-        # 避難所名を表示 (中央に表示)
+    # 避難者グループの人数を表示
+    for j, (idx, row) in enumerate(map_info.evacuee_gdf.iterrows()):
         ax.text(
-            shelter_coords[i, 0],
-            shelter_coords[i, 1] - 3,
-            f"避難所: {i}",
-            fontsize=10,
-            horizontalalignment="center",
-            verticalalignment="bottom",
-        )
-        # 避難所の収容人数を表示
-        ax.text(
-            shelter_coords[i, 0],
-            shelter_coords[i, 1] - 3,
-            f"収容人数: {c[i]}",
-            fontsize=10,
-            horizontalalignment="center",
-            verticalalignment="top",
+            row.geometry.x,
+            row.geometry.y + plusy,
+            f"避難所グループ:{i} 避難人数:{int(row['people'])}",
+            fontsize=fontsize,
+            color="red",
+            ha="center",
         )
 
-    ax.legend(markerscale=0.5)
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.grid(True)
+    ax.legend()
+
     return fig
 
 
 def visualize_evacuation_plan(
+    map_info: MapInfo,
     shelter_coords: np.ndarray,
     group_coords: np.ndarray,
     group_populations: np.ndarray,
@@ -805,6 +854,7 @@ def visualize_evacuation_plan(
     最適化の結果を可視化する関数。
 
     Args:
+    map_info
     shelter_coords (np.ndarray): 避難所の座標。
     group_coords (np.ndarray): 避難者グループの座標。
     group_populations (np.ndarray): 避難者グループの人口。
@@ -816,100 +866,57 @@ def visualize_evacuation_plan(
     Returns:
     plt.Figure: 可視化された図。
     """
-    ax: plt.Axes  # type: ignore
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = map_info.plot_map()
+    map_info.evacuee_gdf.plot(ax=ax, color="red", markersize=30, label="避難者グループ")
+
+    fontsize = 5
+    plusy = 0.0002
     for i in range(len(shelter_coords)):
         if pulp.value(x[i]) > 0:
             ax.scatter(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
-                c="red",
-                s=300,
+                c="green",
+                s=30,
                 label="設置した避難所" if i == 0 else "",
                 alpha=0.6,
             )
             # 避難所名を表示 (中央に表示)
             ax.text(
                 shelter_coords[i, 0],
-                shelter_coords[i, 1] - 3,
-                f"避難所: {i}",
-                fontsize=10,
+                shelter_coords[i, 1] + plusy,
+                f"避難所: {i} 収容人数: {c[i]}",
+                fontsize=fontsize,
                 horizontalalignment="center",
-                verticalalignment="bottom",
-            )
-            # 避難所の収容人数を表示
-            ax.text(
-                shelter_coords[i, 0],
-                shelter_coords[i, 1] - 3,
-                f"収容人数: {c[i]}",
-                fontsize=10,
-                horizontalalignment="center",
-                verticalalignment="top",
             )
         else:
             ax.scatter(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
                 c="black",
-                s=300,
+                s=30,
                 alpha=0.6,
             )
             ax.text(
                 shelter_coords[i, 0],
                 shelter_coords[i, 1],
-                f"避難所: {i} (未選択)",
-                fontsize=10,
+                f"避難所: {i} (未選択), 収容人数: {c[i]}",
+                fontsize=fontsize,
                 horizontalalignment="center",
-                verticalalignment="center",
             )
 
     for j in range(len(group_coords)):
-        ax.scatter(
-            group_coords[j, 0],
-            group_coords[j, 1],
-            c="blue",
-            s=300,
-            label="避難者グループ" if j == 0 else "",
-            alpha=0.6,
-        )
-        # 避難者グループ名を表示 (中央に表示)
-        ax.text(
-            group_coords[j, 0],
-            group_coords[j, 1] - 3,
-            f"避難者グループ: {j}",
-            fontsize=10,
-            horizontalalignment="center",
-            verticalalignment="bottom",
-        )
-        # 避難者グループの人数を表示
-        ax.text(
-            group_coords[j, 0],
-            group_coords[j, 1] - 3,
-            f"人数: {group_populations[j]}",
-            fontsize=10,
-            horizontalalignment="center",
-            verticalalignment="top",
-        )
-
         for i in range(len(shelter_coords)):
             if pulp.value(y[(i, j)]) > 0:
-                ax.arrow(
-                    group_coords[j, 0],
-                    group_coords[j, 1],
-                    shelter_coords[i, 0] - group_coords[j, 0],
-                    shelter_coords[i, 1] - group_coords[j, 1],
-                    head_width=0,
-                    head_length=0,
-                    fc="green",
-                    ec="green",
-                    alpha=0.4,
+                shelter_node = ox.distance.nearest_nodes(
+                    map_info.graph, shelter_coords[i, 0], shelter_coords[i, 1]
                 )
-                ax.text(
-                    (group_coords[j, 0] + shelter_coords[i, 0]) / 2,
-                    (group_coords[j, 1] + shelter_coords[i, 1]) / 2,
-                    f"{pulp.value(y[(i, j)]) * group_populations[j]:.2f}",
-                    fontsize=9,
-                    color="green",
+                group_node = ox.distance.nearest_nodes(
+                    map_info.graph, group_coords[j, 0], group_coords[j, 1]
+                )
+                route = nx.shortest_path(map_info.graph, shelter_node, group_node)
+                ox.plot_graph_route(
+                    map_info.graph, route, ax=ax, route_linewidth=2, node_size=0, route_color="y", label='避難ルート'
                 )
 
     ax.legend()
@@ -945,9 +952,9 @@ def get_parameters() -> tuple[int, int, int, int, int]:
     )
     max_distance = st.number_input(
         "各避難者グループから避難所までの距離の最大値 (max_distance)",
-        min_value=1,
-        max_value=1000,
-        value=100,
+        min_value=1000,
+        max_value=10000,
+        value=3000,
     )
 
     # to int from Number
@@ -969,20 +976,20 @@ def main() -> None:
         st.write("パラメータ設定")
         seed, n, m, max_capacity, max_distance = get_parameters()
 
-        #  l_ijの設定
-        st.write("避難グループから避難所までの避難可能距離")
-        columns = [f"グループ{j}" for j in range(m)]
-        index = [f"避難所{i}" for i in range(n)]
-        l_df = pd.DataFrame(np.full((n, m), max_distance), columns=columns, index=index)
-        l_df = st.data_editor(l_df, num_rows="fixed")
-
     if st.button("データ生成"):
-        shelter_coords, group_coords, group_populations, c, d = generate_data(
+        map_info, shelter_coords, group_coords, group_populations, c, d = generate_data(
             n, m, max_capacity, max_distance, seed
         )
-        fig1 = visualize_population_data(shelter_coords, group_coords, group_populations, c)
+        fig1 = visualize_population_data(map_info)
         st.session_state["data_fig"] = fig1
-        st.session_state["data"] = (shelter_coords, group_coords, group_populations, c, d)
+        st.session_state["data"] = (
+            map_info,
+            shelter_coords,
+            group_coords,
+            group_populations,
+            c,
+            d,
+        )
 
     if "data_fig" in st.session_state:
         st.pyplot(st.session_state["data_fig"])
@@ -995,7 +1002,14 @@ def main() -> None:
             desc: str = REGISTRY[model_option]["description"]  # type: ignore
 
     if "data" in st.session_state:
-        shelter_coords, group_coords, group_populations, c, d = st.session_state["data"]
+        map_info, shelter_coords, group_coords, group_populations, c, d_ = st.session_state["data"]
+
+        st.write("避難グループから避難所までの避難可能距離")
+        columns = [f"グループ{j}" for j in range(m)]
+        index = [f"避難所{i}" for i in range(n)]
+        l_df = pd.DataFrame(d_, columns=columns, index=index)
+        l_df = st.data_editor(l_df, num_rows="fixed")
+        d = l_df.to_numpy()
 
         if st.button("最適化実行"):
             with st.expander("最適化問題の詳細"):
@@ -1027,15 +1041,36 @@ def main() -> None:
                     title = "坂上モデル2の結果"
 
             fig2 = visualize_evacuation_plan(
-                shelter_coords, group_coords, group_populations, x, y, c, title=title
+                map_info, shelter_coords, group_coords, group_populations, x, y, c, title=title
             )
             st.session_state["status"] = status
             st.session_state["opt_fig"] = fig2
+
+            index = [f"避難所: {i}" for i in range(n)]
+            columns = [f"グループ{j}" for j in range(m)]
+            x_df = pd.DataFrame(
+                [pulp.value(x[i]) for i in range(len(x))],
+                columns=["避難所が選択されたかどうか"],
+                index=index,
+            )
+            y_df = pd.DataFrame(
+                [[pulp.value(y[(i, j)]) for j in range(m)] for i in range(n)],
+                index=index,
+                columns=columns,
+            )
+            st.session_state["x_df"] = x_df
+            st.session_state["y_df"] = y_df
 
     if "status" in st.session_state:
         st.write(f"最適化ステータス: {st.session_state['status']}")
     if "opt_fig" in st.session_state:
         st.pyplot(st.session_state["opt_fig"])
+    if "x_df" in st.session_state:
+        st.write('選択された避難所')
+        st.dataframe(st.session_state["x_df"])
+    if "y_df" in st.session_state:
+        st.write('避難グループからの避難割合')
+        st.dataframe(st.session_state["y_df"])
 
 
 if __name__ == "__main__":
