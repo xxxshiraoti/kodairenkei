@@ -46,7 +46,7 @@ class MapInfo:
 
 @st.cache_data
 def generate_data(
-    n: int, m: int, max_capacity: int, max_distance: int, seed: int
+    n: int, m: int, capacities: list[int], total_population: int, max_distance: int, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     人工データを生成する関数。
@@ -54,7 +54,8 @@ def generate_data(
     Args:
     n (int): 避難所の候補地の数。
     m (int): 避難者グループの数。
-    max_capacity (int): 各避難所の収容人数上限。
+    capacities (list[int]): 各避難所の収容人数上限。
+    total_population (int): 避難者グループの総人口。
     max_distance (int): 最大距離（道路ネットワークの計算用）。
     seed (int): 乱数のシード。
 
@@ -91,8 +92,7 @@ def generate_data(
     evacuation_sites = evacuation_sites.sample(n=min(n, len(evacuation_sites)), random_state=seed)
 
     shelter_coords = np.array([[g.x, g.y] for g in evacuation_sites.geometry])
-    shelter_capacities = np.random.randint(10, max_capacity, size=len(shelter_coords))
-    evacuation_sites["capacity"] = shelter_capacities
+    evacuation_sites["capacity"] = capacities
 
     # 避難者グループの位置をランダムに生成（国立市の範囲内）
     evacuee_points = []
@@ -105,7 +105,11 @@ def generate_data(
             evacuee_points.append(p)
 
     evacuee_coords = np.array([[p.x, p.y] for p in evacuee_points])
-    evacuee_populations = np.random.randint(5, 50, size=m)
+    # 避難者グループの人口をランダムに生成
+    # 人口の合計が total_population になるように割合をランダムに生成
+    population_ratios = np.random.rand(m)
+    population_ratios /= population_ratios.sum()
+    evacuee_populations = (population_ratios * total_population).astype(int)
     evacuee_groups = pd.DataFrame(
         {
             "latitude": evacuee_coords[:, 1],
@@ -141,7 +145,7 @@ def generate_data(
         shelter_coords,
         evacuee_coords,
         evacuee_populations,
-        shelter_capacities,
+        capacities,
         distance_matrix.T,
     )
 
@@ -842,6 +846,7 @@ def visualize_population_data(map_info: MapInfo) -> plt.Figure:
 
 def visualize_evacuation_plan(
     map_info: MapInfo,
+    distance_matrix: np.ndarray,
     shelter_coords: np.ndarray,
     group_coords: np.ndarray,
     group_populations: np.ndarray,
@@ -919,6 +924,13 @@ def visualize_evacuation_plan(
                     map_info.graph, route, ax=ax, route_linewidth=2, node_size=0, route_color="y", label='避難ルート'
                 )
 
+    # 避難の総距離をタイトルに追加
+    total_distance = 0
+    for j in range(len(group_coords)):
+        for i in range(len(shelter_coords)):
+            total_distance += pulp.value(y[(i, j)]) * group_populations[j] * distance_matrix[i, j]
+    title += f" (避難総距離: {total_distance:.2f})"
+
     ax.legend()
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
@@ -937,7 +949,7 @@ def set_page_config() -> None:
     )
 
 
-def get_parameters() -> tuple[int, int, int, int, int]:
+def get_parameters() -> tuple[int, int, int, int, int, int]:
     """
     パラメータを取得する関数。
 
@@ -946,9 +958,19 @@ def get_parameters() -> tuple[int, int, int, int, int]:
     """
     seed = st.number_input("乱数シード (seed)", min_value=0, value=42)
     n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=5)
+    capacity_df = pd.DataFrame(
+        {
+            f"避難所{i}": 100
+            for i in range(n)
+        },
+        index=["収容人数上限"],
+    ).T
+    capacities = st.data_editor(
+        capacity_df, num_rows="fixed", key="capacity_df"
+    )['収容人数上限'].to_list()
     m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100, value=5)
-    max_capacity = st.number_input(
-        "各避難所の収容人数上限 (max_capacity)", min_value=1, max_value=1000, value=50
+    total_population = st.number_input(
+        "全避難グループの合計人数", min_value=1, max_value=1000, value=100
     )
     max_distance = st.number_input(
         "各避難者グループから避難所までの距離の最大値 (max_distance)",
@@ -961,10 +983,9 @@ def get_parameters() -> tuple[int, int, int, int, int]:
     seed = int(seed)
     n = int(n)
     m = int(m)
-    max_capacity = int(max_capacity)
     max_distance = int(max_distance)
 
-    return seed, n, m, max_capacity, max_distance
+    return seed, n, m, capacities, total_population, max_distance
 
 
 def main() -> None:
@@ -974,11 +995,11 @@ def main() -> None:
     # パラメータ入力
     with st.sidebar:
         st.write("パラメータ設定")
-        seed, n, m, max_capacity, max_distance = get_parameters()
+        seed, n, m, capacities, total_population, max_distance = get_parameters()
 
     if st.button("データ生成"):
         map_info, shelter_coords, group_coords, group_populations, c, d = generate_data(
-            n, m, max_capacity, max_distance, seed
+            n, m, capacities, total_population, max_distance, seed
         )
         fig1 = visualize_population_data(map_info)
         st.session_state["data_fig"] = fig1
@@ -1041,7 +1062,7 @@ def main() -> None:
                     title = "坂上モデル2の結果"
 
             fig2 = visualize_evacuation_plan(
-                map_info, shelter_coords, group_coords, group_populations, x, y, c, title=title
+                map_info, d, shelter_coords, group_coords, group_populations, x, y, c, title=title
             )
             st.session_state["status"] = status
             st.session_state["opt_fig"] = fig2
