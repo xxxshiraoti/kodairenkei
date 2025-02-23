@@ -957,7 +957,7 @@ def get_parameters() -> tuple[int, int, int, int, int, int]:
     tuple[int, int, int, int]: seed、避難所の候補地の数、避難者グループの数、各避難所の収容人数上限、各避難者グループから避難所までの距離の最大値。
     """
     seed = st.number_input("乱数シード (seed)", min_value=0, value=42)
-    n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=100, value=5)
+    n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=10000, value=5)
     capacity_df = pd.DataFrame(
         {
             f"避難所{i}": 100
@@ -968,14 +968,14 @@ def get_parameters() -> tuple[int, int, int, int, int, int]:
     capacities = st.data_editor(
         capacity_df, num_rows="fixed", key="capacity_df"
     )['収容人数上限'].to_list()
-    m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100, value=5)
+    m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100000, value=5)
     total_population = st.number_input(
-        "全避難グループの合計人数", min_value=1, max_value=1000, value=100
+        "全避難グループの合計人数", min_value=1, max_value=1000000000, value=100
     )
     max_distance = st.number_input(
         "各避難者グループから避難所までの距離の最大値 (max_distance)",
         min_value=1000,
-        max_value=10000,
+        max_value=10000000,
         value=3000,
     )
 
