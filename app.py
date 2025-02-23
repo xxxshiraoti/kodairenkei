@@ -921,7 +921,13 @@ def visualize_evacuation_plan(
                 )
                 route = nx.shortest_path(map_info.graph, shelter_node, group_node)
                 ox.plot_graph_route(
-                    map_info.graph, route, ax=ax, route_linewidth=2, node_size=0, route_color="y", label='避難ルート'
+                    map_info.graph,
+                    route,
+                    ax=ax,
+                    route_linewidth=2,
+                    node_size=0,
+                    route_color="y",
+                    label="避難ルート",
                 )
 
     # 避難の総距離をタイトルに追加
@@ -959,15 +965,12 @@ def get_parameters() -> tuple[int, int, int, int, int, int]:
     seed = st.number_input("乱数シード (seed)", min_value=0, value=42)
     n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=10000, value=5)
     capacity_df = pd.DataFrame(
-        {
-            f"避難所{i}": 100
-            for i in range(n)
-        },
+        {f"避難所{i}": 100 for i in range(n)},
         index=["収容人数上限"],
     ).T
-    capacities = st.data_editor(
-        capacity_df, num_rows="fixed", key="capacity_df"
-    )['収容人数上限'].to_list()
+    capacities = st.data_editor(capacity_df, num_rows="fixed", key="capacity_df")[
+        "収容人数上限"
+    ].to_list()
     m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100000, value=5)
     total_population = st.number_input(
         "全避難グループの合計人数", min_value=1, max_value=1000000000, value=100
@@ -1087,10 +1090,10 @@ def main() -> None:
     if "opt_fig" in st.session_state:
         st.pyplot(st.session_state["opt_fig"])
     if "x_df" in st.session_state:
-        st.write('選択された避難所')
+        st.write("選択された避難所")
         st.dataframe(st.session_state["x_df"])
     if "y_df" in st.session_state:
-        st.write('避難グループからの避難割合')
+        st.write("避難グループからの避難割合")
         st.dataframe(st.session_state["y_df"])
 
 
