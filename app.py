@@ -1,3 +1,4 @@
+# ライブラリ
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -964,6 +965,8 @@ def get_parameters() -> tuple[int, int, int, int, int, int]:
     """
     seed = st.number_input("乱数シード (seed)", min_value=0, value=42)
     n = st.number_input("避難所の候補地の数 (n)", min_value=1, max_value=10000, value=5)
+
+    
     capacity_df = pd.DataFrame(
         {f"避難所{i}": 100 for i in range(n)},
         index=["収容人数上限"],
@@ -971,6 +974,7 @@ def get_parameters() -> tuple[int, int, int, int, int, int]:
     capacities = st.data_editor(capacity_df, num_rows="fixed", key="capacity_df")[
         "収容人数上限"
     ].to_list()
+
     m = st.number_input("避難者グループの数 (m)", min_value=1, max_value=100000, value=5)
     total_population = st.number_input(
         "全避難グループの合計人数", min_value=1, max_value=1000000000, value=100
