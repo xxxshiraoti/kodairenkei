@@ -180,6 +180,8 @@ rich==13.7.1
 rpds-py==0.19.1
     # via jsonschema
     # via referencing
+ruff==0.12.4
+    # via research-template
 scikit-learn==1.4.2
     # via research-template
 scipy==1.13.0

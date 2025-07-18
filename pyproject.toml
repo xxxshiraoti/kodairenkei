@@ -19,6 +19,7 @@ dependencies = [
     "geopandas>=1.0.1",
     "networkx>=3.4.2",
     "ace-tools>=0.0",
+    "ruff>=0.12.4",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"

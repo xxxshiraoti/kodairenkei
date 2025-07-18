@@ -1,4 +1,4 @@
-# 避難所の最適配置
+# コンビニ・公園の最適配置
 
 [streamlit-app-2024-07-25-22-07-22.webm](https://github.com/user-attachments/assets/af473515-833b-4517-9ee2-6cafcae0f945)
 
@@ -17,8 +17,5 @@ rye sync
 ## アプリケーションの起動
 
 ```bash
-rye run streamlit run app.py
+rye run streamlit run app_xxxx.py
 ```
-## Google Colabでの実行
-
-https://colab.research.google.com/drive/13lI8phdexhRvRNzSCFY0NiGAR41tUZCC?usp=sharing

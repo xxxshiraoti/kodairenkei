@@ -36,7 +36,9 @@ def generate_data(
         demand_populations_list.append(max(5, int(population)))
     demand_populations = np.array(demand_populations_list)
 
-    d = np.linalg.norm(candidate_coords[:, np.newaxis, :] - demand_coords[np.newaxis, :, :], axis=2)
+    d = np.linalg.norm(
+        candidate_coords[:, np.newaxis, :] - demand_coords[np.newaxis, :, :], axis=2
+    )
 
     return candidate_coords, demand_coords, demand_populations, d
 
@@ -120,6 +122,7 @@ $$\\text{Maximize} \\quad \\sum_{i \\in I} \\sum_{j \\in J} p_j y_{ij}$$
    $$d_{ij} z_{ij} \\leq D \\quad (\\forall i \\in I, \\forall j \\in J)$$
 """
 
+
 def get_model_parameters() -> Dict[str, Any]:
     st.header("最適化モデルのパラメータ")
     params: Dict[str, Any] = {}
@@ -128,23 +131,27 @@ def get_model_parameters() -> Dict[str, Any]:
         min_value=1,
         max_value=1000,
         value=70,
-        help="児童が公園まで歩いて行ける最大の距離。この距離を超える公園は利用できません。"
+        help="児童が公園まで歩いて行ける最大の距離。この距離を超える公園は利用できません。",
     )
 
     # st.session_stateから公園の数を取得して、動的に入力欄を生成
-    n_parks = st.session_state.get('n_slider', 10) # デフォルト値を設定
-    
+    n_parks = st.session_state.get("n_slider", 10)  # デフォルト値を設定
+
     c_up_list = []
     c_low_list = []
-    
+
     with st.expander("公園ごとの収容人数を設定", expanded=True):
         for i in range(n_parks):
             col1, col2 = st.columns(2)
             with col1:
-                c_up_val = st.number_input(f"候補地 {i} の最大収容人数", min_value=1, value=150, key=f"cup_{i}")
+                c_up_val = st.number_input(
+                    f"候補地 {i} の最大収容人数", min_value=1, value=150, key=f"cup_{i}"
+                )
                 c_up_list.append(c_up_val)
             with col2:
-                c_low_val = st.number_input(f"候補地 {i} の最低利用人数", min_value=0, value=10, key=f"clow_{i}")
+                c_low_val = st.number_input(
+                    f"候補地 {i} の最低利用人数", min_value=0, value=10, key=f"clow_{i}"
+                )
                 c_low_list.append(c_low_val)
 
     params["c_up_list"] = c_up_list
@@ -158,7 +165,9 @@ def optimize_max_dist(
 ) -> Tuple[str, Dict[int, pulp.LpVariable], Dict[Tuple[int, int], pulp.LpVariable], float]:
     model = pulp.LpProblem("Minimize_Max_Park_Distance", pulp.LpMinimize)
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
-    y = pulp.LpVariable.dicts("y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous)
+    y = pulp.LpVariable.dicts(
+        "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
+    )
     z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
     T = pulp.LpVariable("T", lowBound=0, cat=pulp.LpContinuous)
 
@@ -190,7 +199,9 @@ def optimize_max_users(
 ) -> Tuple[str, Dict[int, pulp.LpVariable], Dict[Tuple[int, int], pulp.LpVariable], float]:
     model = pulp.LpProblem("Maximize_Total_Park_Users", pulp.LpMaximize)
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
-    y = pulp.LpVariable.dicts("y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous)
+    y = pulp.LpVariable.dicts(
+        "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
+    )
     z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
 
     model += pulp.lpSum(p[j] * y[i][j] for i in range(n) for j in range(m))
@@ -216,16 +227,23 @@ def optimize_max_users(
 
 
 def visualize_initial_data(
-    candidate_coords: np.ndarray, demand_coords: np.ndarray, demand_populations: np.ndarray, c_up: np.ndarray
+    candidate_coords: np.ndarray,
+    demand_coords: np.ndarray,
+    demand_populations: np.ndarray,
+    c_up: np.ndarray,
 ) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.scatter(
-        demand_coords[:, 0], demand_coords[:, 1], c="blue", s=300,
-        label="小学校", alpha=0.7
+        demand_coords[:, 0], demand_coords[:, 1], c="blue", s=300, label="小学校", alpha=0.7
     )
     ax.scatter(
-        candidate_coords[:, 0], candidate_coords[:, 1], c="red", s=300,
-        label="公園候補地", alpha=0.7, marker="s"
+        candidate_coords[:, 0],
+        candidate_coords[:, 1],
+        c="red",
+        s=300,
+        label="公園候補地",
+        alpha=0.7,
+        marker="s",
     )
 
     for i, (x, y) in enumerate(demand_coords):
@@ -240,7 +258,7 @@ def visualize_initial_data(
     ax.set_xlabel("X座標")
     ax.set_ylabel("Y座標")
     ax.set_title("初期データ：公園候補地と小学校の配置")
-    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.grid(True, linestyle="--", alpha=0.6)
     return fig
 
 
@@ -254,46 +272,75 @@ def visualize_optimization_result(
     title: str,
 ) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(12, 10))
-    
+
     # 凡例用のダミープロット
-    ax.scatter([], [], c="red", s=400, label="設置された公園", marker="s", edgecolors='black')
+    ax.scatter([], [], c="red", s=400, label="設置された公園", marker="s", edgecolors="black")
     ax.scatter([], [], c="gray", s=300, label="設置されなかった候補地", alpha=0.4, marker="s")
     ax.scatter([], [], c="blue", s=300, label="小学校", alpha=0.7)
 
     for i, coord in enumerate(candidate_coords):
         if pulp.value(x[i]) > 0.5:
-            ax.scatter(coord[0], coord[1], c="red", s=400, alpha=0.8, marker="s", edgecolors='black')
-            ax.text(coord[0], coord[1] + 2.5, f"候補地{i}", fontsize=10, ha="center", va="bottom", weight='bold')
-            ax.text(coord[0], coord[1] - 2.5, f"定員: {c_up[i]}", fontsize=10, ha="center", va="top")
+            ax.scatter(
+                coord[0], coord[1], c="red", s=400, alpha=0.8, marker="s", edgecolors="black"
+            )
+            ax.text(
+                coord[0],
+                coord[1] + 2.5,
+                f"候補地{i}",
+                fontsize=10,
+                ha="center",
+                va="bottom",
+                weight="bold",
+            )
+            ax.text(
+                coord[0], coord[1] - 2.5, f"定員: {c_up[i]}", fontsize=10, ha="center", va="top"
+            )
         else:
             ax.scatter(coord[0], coord[1], c="gray", s=300, alpha=0.4, marker="s")
 
     ax.scatter(demand_coords[:, 0], demand_coords[:, 1], c="blue", s=300, alpha=0.7)
     for j, coord in enumerate(demand_coords):
         ax.text(coord[0], coord[1] + 2, f"小学校{j}", fontsize=10, ha="center", va="bottom")
-        ax.text(coord[0], coord[1] - 2, f"児童数: {demand_populations[j]}", fontsize=10, ha="center", va="top")
+        ax.text(
+            coord[0],
+            coord[1] - 2,
+            f"児童数: {demand_populations[j]}",
+            fontsize=10,
+            ha="center",
+            va="top",
+        )
 
     for i in range(len(candidate_coords)):
         for j in range(len(demand_coords)):
-            if y.get((i, j)) is not None and pulp.value(y[(i, j)]) is not None and pulp.value(y[(i, j)]) > 1e-3:
+            if (
+                y.get((i, j)) is not None
+                and pulp.value(y[(i, j)]) is not None
+                and pulp.value(y[(i, j)]) > 1e-3
+            ):
                 ax.plot(
                     [demand_coords[j, 0], candidate_coords[i, 0]],
                     [demand_coords[j, 1], candidate_coords[i, 1]],
-                    color="green", alpha=0.6, linestyle='--'
+                    color="green",
+                    alpha=0.6,
+                    linestyle="--",
                 )
                 assigned_pop = pulp.value(y[(i, j)]) * demand_populations[j]
                 ax.text(
                     (demand_coords[j, 0] + candidate_coords[i, 0]) / 2,
                     (demand_coords[j, 1] + candidate_coords[i, 1]) / 2,
-                    f"{assigned_pop:.1f}人", fontsize=9, color="darkgreen",
-                    bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', boxstyle='round,pad=0.2')
+                    f"{assigned_pop:.1f}人",
+                    fontsize=9,
+                    color="darkgreen",
+                    bbox=dict(
+                        facecolor="white", alpha=0.5, edgecolor="none", boxstyle="round,pad=0.2"
+                    ),
                 )
-    
+
     ax.legend()
     ax.set_xlabel("X座標")
     ax.set_ylabel("Y座標")
     ax.set_title(title)
-    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.grid(True, linestyle="--", alpha=0.6)
     return fig
 
 
@@ -307,12 +354,22 @@ def set_page_config() -> None:
 
 def get_common_parameters() -> Tuple[int, int, int, int]:
     st.header("データ生成パラメータ")
-    seed = st.number_input("乱数シード", min_value=0, value=42, help="データ生成に使用する乱数のシード値です。")
+    seed = st.number_input(
+        "乱数シード", min_value=0, value=42, help="データ生成に使用する乱数のシード値です。"
+    )
     # nのスライダーにキーを設定し、他の場所から値を取得できるようにする
-    n = st.slider("公園候補地の数 (n)", 1, 50, 10, key="n_slider", help="地図上に配置する公園候補地の数。")
+    n = st.slider(
+        "公園候補地の数 (n)", 1, 50, 10, key="n_slider", help="地図上に配置する公園候補地の数。"
+    )
     m = st.slider("小学校の数 (m)", 1, 50, 15, help="地図上に配置する小学校の数。")
     # 名称を分かりやすく変更
-    area_size = st.slider("シミュレーションエリアの広さ", 50, 200, 100, help="公園や小学校が配置される仮想的な正方形エリアの一辺の長さを設定します。")
+    area_size = st.slider(
+        "シミュレーションエリアの広さ",
+        50,
+        200,
+        100,
+        help="公園や小学校が配置される仮想的な正方形エリアの一辺の長さを設定します。",
+    )
     return int(seed), int(n), int(m), int(area_size)
 
 
@@ -335,17 +392,17 @@ def main() -> None:
     with st.sidebar:
         st.title("⚙️ 設定")
         model_option = st.selectbox("最適化モデルを選択してください", list(REGISTRY.keys()))
-        if model_option is None: return
+        if model_option is None:
+            return
 
         desc: str = REGISTRY[model_option]["description"]
         param_fn: Callable[..., Dict[str, Any]] = REGISTRY[model_option]["param_fn"]
-        
+
         # Get parameters for data generation
         seed, n, m, area_size = get_common_parameters()
-        
+
         # Get parameters for the optimization model (this will now include individual capacities)
         model_params = param_fn()
-
 
     col1, col2 = st.columns(2)
 
@@ -354,14 +411,14 @@ def main() -> None:
         if st.button("データを生成・表示"):
             # Generate base data (coordinates, populations, distances)
             candidate_coords, demand_coords, p, d = generate_data(n, m, area_size, seed)
-            
+
             # Get the user-defined capacity arrays from the sidebar
             c_up = np.array(model_params["c_up_list"])
             c_low = np.array(model_params["c_low_list"])
 
             # Store all data, including user-defined capacities, in the session state
             st.session_state["data_park"] = (candidate_coords, demand_coords, p, c_up, c_low, d)
-            
+
             # Visualize the initial data with the specified capacities
             fig = visualize_initial_data(candidate_coords, demand_coords, p, c_up)
             st.session_state["initial_fig_park"] = fig
@@ -379,32 +436,39 @@ def main() -> None:
                     st.markdown(desc, unsafe_allow_html=True)
                 with st.spinner("最適化計算を実行中..."):
                     # Retrieve all data from session state. c_up and c_low are now user-defined arrays.
-                    candidate_coords, demand_coords, p, c_up_model, c_low_model, d = st.session_state["data_park"]
-                    
+                    candidate_coords, demand_coords, p, c_up_model, c_low_model, d = (
+                        st.session_state["data_park"]
+                    )
+
                     d_param = model_params["D"]
-                    
+
                     title = ""
                     status = "Not Solved"
                     if model_option == "最大利用距離の最小化":
-                        status, x, y, max_dist = optimize_max_dist(n, m, p, c_up_model, c_low_model, d, D=d_param)
+                        status, x, y, max_dist = optimize_max_dist(
+                            n, m, p, c_up_model, c_low_model, d, D=d_param
+                        )
                         if "Optimal" in status or "Feasible" in status:
                             title = f"最適化結果: {model_option}\n(最大距離: {max_dist:.2f})"
-                    
+
                     elif model_option == "合計利用人数の最大化":
-                        status, x, y, total_users = optimize_max_users(n, m, p, c_up_model, c_low_model, d, D=d_param)
+                        status, x, y, total_users = optimize_max_users(
+                            n, m, p, c_up_model, c_low_model, d, D=d_param
+                        )
                         if "Optimal" in status or "Feasible" in status:
                             total_pop = sum(p)
                             title = f"最適化結果: {model_option}\n(合計利用者数: {total_users:.0f}人 / 全体児童数: {total_pop}人)"
 
                     if "Optimal" in status or "Feasible" in status:
-                        fig = visualize_optimization_result(candidate_coords, demand_coords, p, x, y, c_up_model, title)
+                        fig = visualize_optimization_result(
+                            candidate_coords, demand_coords, p, x, y, c_up_model, title
+                        )
                         st.session_state["status_park"] = status
                         st.session_state["result_fig_park"] = fig
                     else:
                         st.error(f"最適化に失敗しました。ステータス: {status}")
                         if "result_fig_park" in st.session_state:
                             del st.session_state["result_fig_park"]
-
 
             if "result_fig_park" in st.session_state:
                 st.success(f"最適化ステータス: **{st.session_state['status_park']}**")
@@ -413,6 +477,7 @@ def main() -> None:
                 st.info("「最適化を実行」ボタンを押して、計算を開始してください。")
         else:
             st.warning("先に左側の「データを生成・表示」ボタンでデータを生成してください。")
+
 
 if __name__ == "__main__":
     main()
