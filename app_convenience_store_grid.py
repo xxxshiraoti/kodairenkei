@@ -5,7 +5,7 @@ import pulp
 import streamlit as st
 from typing import Any, Callable, Dict, Tuple
 
-# --- Constants ---
+# --- 定数 ---
 LANDMARK_DEFINITIONS = {
     "stations": {"label": "駅", "color": "purple", "marker": "P", "influence": 2.0},
     "schools": {"label": "学校", "color": "orange", "marker": "s", "influence": 1.5},
@@ -63,7 +63,7 @@ DESC_CONBINI_P_CENTER = """
 #### 定数
 - $I$: コンビニ候補地の集合（採算ラインをクリアした場所のみ）
 - $J$: 住民グループの集合
-- $p$: 設置するコンビニの店舗数
+- $N$: 設置するコンビニの上限店舗数
 - $D$: 住民が到達可能な最大距離
 - $d_{ij}$: 候補地$i$と住民グループ$j$の距離
 
@@ -77,8 +77,8 @@ DESC_CONBINI_P_CENTER = """
 $$\\text{Minimize} \\quad T$$
 
 **制約条件:**
-1. **店舗設置数**: 指定された数だけ店舗を設置する
-   $$\\sum_{i \\in I} x_i = p$$
+1. **店舗設置数**: 設置する店舗数は上限$N$以下
+   $$\\sum_{i \\in I} x_i \\leq N$$
 2. **住民の割り当て**: 全ての住民グループが、いずれか１つの設置された店舗を利用する
    $$\\sum_{i \\in I} y_{ij} = 1 \\quad (\\forall j \\in J)$$
    $$y_{ij} \\leq x_i \\quad (\\forall i \\in I, \\forall j \\in J)$$
@@ -100,7 +100,7 @@ DESC_CONBINI_P_MEDIAN = """
 #### 定数
 - $I$: コンビニ候補地の集合（採算ラインをクリアした場所のみ）
 - $J$: 住民グループの集合
-- $p$: 設置するコンビニの店舗数
+- $N$: 設置するコンビニの上限店舗数
 - $D$: 住民が到達可能な最大距離
 - $p_j$: 住民グループ$j$の人口
 - $d_{ij}$: 候補地$i$と住民グループ$j$の距離
@@ -114,8 +114,8 @@ DESC_CONBINI_P_MEDIAN = """
 $$\\text{Minimize} \\quad \\sum_{i \\in I} \\sum_{j \\in J} p_j d_{ij} y_{ij}$$
 
 **制約条件:**
-1. **店舗設置数**: 指定された数だけ店舗を設置する
-   $$\\sum_{i \\in I} x_i = p$$
+1. **店舗設置数**: 設置する店舗数は上限$N$以下
+   $$\\sum_{i \\in I} x_i \\leq N$$
 2. **住民の割り当て**: 全ての住民グループが、いずれか１つの設置された店舗を利用する
    $$\\sum_{i \\in I} y_{ij} = 1 \\quad (\\forall j \\in J)$$
    $$y_{ij} \\leq x_i \\quad (\\forall i \\in I, \\forall j \\in J)$$
@@ -125,7 +125,7 @@ $$\\text{Minimize} \\quad \\sum_{i \\in I} \\sum_{j \\in J} p_j d_{ij} y_{ij}$$
 
 # --- 最適化関数 ---
 def optimize_p_center(
-    n: int, m: int, dists: np.ndarray, p_stores: int, D_max: int
+    n: int, m: int, dists: np.ndarray, N_stores: int, D_max: int
 ) -> Tuple[str, Dict, Dict, float]:
     model = pulp.LpProblem("p-center", pulp.LpMinimize)
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
@@ -133,7 +133,7 @@ def optimize_p_center(
     T = pulp.LpVariable("T", lowBound=0)
     model += T
 
-    model += pulp.lpSum(x[i] for i in range(n)) == p_stores
+    model += pulp.lpSum(x[i] for i in range(n)) <= N_stores
     for j in range(m):
         model += pulp.lpSum(y[i][j] for i in range(n)) == 1
         model += pulp.lpSum(dists[i][j] * y[i][j] for i in range(n)) <= T
@@ -151,14 +151,14 @@ def optimize_p_center(
     return status, x_sol, y_sol, obj_val
 
 def optimize_p_median(
-    n: int, m: int, pops: np.ndarray, dists: np.ndarray, p_stores: int, D_max: int
+    n: int, m: int, pops: np.ndarray, dists: np.ndarray, N_stores: int, D_max: int
 ) -> Tuple[str, Dict, Dict, float]:
     model = pulp.LpProblem("p-median", pulp.LpMinimize)
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
     y = pulp.LpVariable.dicts("y", (range(n), range(m)), cat=pulp.LpBinary)
     model += pulp.lpSum(pops[j] * dists[i][j] * y[i][j] for i in range(n) for j in range(m))
 
-    model += pulp.lpSum(x[i] for i in range(n)) == p_stores
+    model += pulp.lpSum(x[i] for i in range(n)) <= N_stores
     for j in range(m):
         model += pulp.lpSum(y[i][j] for i in range(n)) == 1
     for i in range(n):
@@ -175,9 +175,6 @@ def optimize_p_median(
     return status, x_sol, y_sol, obj_val
 
 # --- UI設定関数 ---
-def set_page_config():
-    st.set_page_config(page_title="コンビニ配置 最適化シミュレーター", page_icon="🏪", layout="wide")
-
 def get_data_generation_params():
     st.header("データ生成パラメータ")
     seed = st.number_input("乱数シード", 0, value=42)
@@ -193,12 +190,12 @@ def get_data_generation_params():
 def get_model_parameters(n_candidates: int):
     st.header("最適化モデルのパラメータ")
     params = {}
-    params["p"] = st.slider("設置するコンビニの店舗数 (p)", 1, n_candidates, min(5, n_candidates), help="候補地の中から実際に設置する数。")
+    params["N"] = st.slider("設置するコンビニの上限店舗数 (N)", 1, n_candidates, min(5, n_candidates), help="設置するコンビニの最大数。")
     params["D"] = st.number_input("住民が到達可能な最大距離 (D)", 1, value=250)
     
     st.subheader("ビジネス上の採算性評価")
     params["R"] = st.slider("商圏半径 (R)", 10, 100, 50, help="各候補地の集客範囲（この半径内の住民を対象とする）。")
-    params["M_min"] = st.number_input("最低商圏内人口", 0, 5000, 300, help="出店に必要となる商圏内の最低人口。")
+    params["M_min"] = st.slider("最低商圏内人口", 0, 2000, 300, help="出店に必要となる商圏内の最低人口。")
     return params
 
 # --- 可視化関数 ---
@@ -219,19 +216,21 @@ def visualize_initial_data(
     return fig
 
 def visualize_optimization_result(
-    all_candidate_coords: np.ndarray, eligible_indices: np.ndarray, demand_coords: np.ndarray, demand_populations: np.ndarray,
-    x: Dict, y: Dict, landmarks: Dict, title: str
+    all_candidate_coords: np.ndarray, eligible_indices: np.ndarray, demand_coords: np.ndarray, 
+    demand_populations: np.ndarray, x: Dict, y: Dict, landmarks: Dict, title: str
 ) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(12, 10))
+    # プロットの凡例を事前に定義
     ax.scatter([], [], c="red", s=100, label="設置されたコンビニ", marker="s", edgecolors="black")
     ax.scatter([], [], c="lightgray", s=50, label="採算ライン未満の候補地", alpha=0.8, marker="x")
     ax.scatter([], [], c="gray", s=50, label="設置されなかった候補地", alpha=0.5, marker="s")
     ax.scatter([], [], c="blue", s=100, label="住民グループ", alpha=0.6)
 
-    # 全ての候補地をループ
+    # 全ての候補地をループしてプロット
     for i in range(len(all_candidate_coords)):
         coord = all_candidate_coords[i]
         if i in eligible_indices:
+            # 採算ラインをクリアした候補地
             local_idx = list(eligible_indices).index(i)
             if x.get(local_idx, 0) > 0.5:
                  ax.scatter(coord[0], coord[1], c="red", s=100, marker="s", edgecolors="black", zorder=5)
@@ -239,6 +238,7 @@ def visualize_optimization_result(
             else:
                  ax.scatter(coord[0], coord[1], c="gray", s=50, alpha=0.5, marker="s")
         else:
+            # 採算ライン未満で除外された候補地
             ax.scatter(coord[0], coord[1], c="lightgray", s=50, alpha=0.8, marker="x")
 
     ax.scatter(demand_coords[:, 0], demand_coords[:, 1], c="blue", s=demand_populations, alpha=0.6)
@@ -247,6 +247,11 @@ def visualize_optimization_result(
             i_global = eligible_indices[i_local]
             ax.plot([demand_coords[j, 0], all_candidate_coords[i_global, 0]], [demand_coords[j, 1], all_candidate_coords[i_global, 1]], color="green", alpha=0.5, linestyle="--")
     
+    for key, coords in landmarks.items():
+        if coords.size > 0:
+            definition = LANDMARK_DEFINITIONS[key]
+            ax.scatter(coords[:, 0], coords[:, 1], c=definition["color"], s=200, label=definition["label"], marker=definition["marker"], edgecolors='black', alpha=0.5)
+
     ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
     ax.set_xlabel("X座標"); ax.set_ylabel("Y座標")
     ax.set_title(title)
@@ -260,17 +265,27 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
 }
 
 def main() -> None:
-    set_page_config()
+    st.set_page_config(page_title="コンビニ配置 最適化シミュレーター", page_icon="🏪", layout="wide")
+    
     st.title("🏪 コンビニ配置 最適化シミュレーター")
     st.markdown("ランドマーク、商圏内の最低人口（採算性）を考慮して、最適なコンビニ配置を計算します。")
 
+    # --- サイドバーのUI要素を全てここで定義 ---
     with st.sidebar:
         st.title("⚙️ 設定")
         model_option = st.selectbox("最適化モデルを選択してください", list(REGISTRY.keys()))
-        if not model_option: return
-
         area_size, grid_res, landmark_counts, m, seed = get_data_generation_params()
         
+        # 最適化パラメータはデータ生成後に表示する
+        if "data_conbini" in st.session_state:
+            st.markdown("---") # UIを分かりやすくするための区切り線
+            all_coords, _, _, _, _ = st.session_state["data_conbini"]
+            n_total = len(all_coords) if len(all_coords) > 0 else 1
+            model_params = get_model_parameters(n_total)
+        else:
+            model_params = None
+
+    # --- メイン画面のレイアウト ---
     col1, col2 = st.columns(2)
     with col1:
         st.header("📍 初期データ")
@@ -281,6 +296,7 @@ def main() -> None:
                 fig = visualize_initial_data(coords, demands, pops, landmarks)
                 st.session_state["initial_fig_conbini"] = fig
                 st.success(f"データ生成完了！ (全候補地: {len(coords)}件)")
+                st.rerun()
             else:
                 st.error("候補地が0件になりました。グリッド解像度を上げるか、ランドマークの影響を調整してください。")
                 if "initial_fig_conbini" in st.session_state: del st.session_state["initial_fig_conbini"]
@@ -293,62 +309,60 @@ def main() -> None:
     with col2:
         st.header("📈 最適化結果")
         if "data_conbini" in st.session_state:
-            all_coords, all_demands, all_pops, all_dists, all_landmarks = st.session_state["data_conbini"]
-            with st.sidebar:
-                n_total = len(all_coords) if len(all_coords) > 0 else 1
-                model_params = get_model_parameters(n_total)
-
-            if st.button("最適化を実行"):
-                R = model_params["R"]
-                M_min = model_params["M_min"]
-                eligible_indices = []
-                for i in range(len(all_coords)):
-                    distances_from_i = all_dists[i, :]
-                    indices_in_catchment = np.where(distances_from_i <= R)[0]
-                    population_in_catchment = np.sum(all_pops[indices_in_catchment])
-                    if population_in_catchment >= M_min:
-                        eligible_indices.append(i)
-                
-                if len(eligible_indices) < model_params["p"]:
-                    st.error(f"採算ラインをクリアした候補地が {len(eligible_indices)}件しかなく、設置希望店舗数 p={model_params['p']} を満たせません。商圏半径を広げるか、最低商圏内人口を減らしてください。")
-                else:
-                    eligible_dists = all_dists[np.ix_(eligible_indices, range(len(all_demands)))]
-                    n_eligible = len(eligible_indices)
-                    m_demands = len(all_demands)
-                    
-                    st.info(f"全 {len(all_coords)}件の候補地のうち、採算ラインをクリアしたのは {n_eligible}件です。この中から最適配置を計算します。")
-
-                    with st.expander("最適化問題の詳細", expanded=False):
-                        st.markdown(REGISTRY[model_option]["description"], unsafe_allow_html=True)
-                    with st.spinner("最適化計算を実行中..."):
-                        opt_func = REGISTRY[model_option]["func"]
-                        
-                        args = ()
-                        if "p-メディアン" in model_option:
-                            args = (n_eligible, m_demands, all_pops, eligible_dists, model_params["p"], model_params["D"])
-                        else:
-                            args = (n_eligible, m_demands, eligible_dists, model_params["p"], model_params["D"])
-                        
-                        status, x, y, obj_val = opt_func(*args)
-
-                        if "Optimal" in status or "Feasible" in status:
-                            if "最大徒歩距離" in model_option:
-                                title = f"最適化結果: {model_option}\n(最大距離: {obj_val:.2f})"
-                            else:
-                                title = f"最適化結果: {model_option}\n(総距離: {obj_val:,.0f})"
-                            
-                            fig = visualize_optimization_result(all_coords, np.array(eligible_indices), all_demands, all_pops, x, y, all_landmarks, title)
-                            st.session_state["status_conbini"] = status
-                            st.session_state["result_fig_conbini"] = fig
-                        else:
-                            st.error(f"最適化に失敗 (Status: {status})。制約が厳しすぎる（例: Dが小さい、pが少ない）可能性があります。")
-                            if "result_fig_conbini" in st.session_state: del st.session_state["result_fig_conbini"]
-
-            if "result_fig_conbini" in st.session_state:
-                st.success(f"最適化ステータス: **{st.session_state['status_conbini']}**")
-                st.pyplot(st.session_state["result_fig_conbini"])
+            if model_params is None:
+                st.info("サイドバーで最適化パラメータを設定し、「最適化を実行」ボタンを押してください。")
             else:
-                st.info("「最適化を実行」ボタンを押して計算を開始してください。")
+                all_coords, all_demands, all_pops, all_dists, all_landmarks = st.session_state["data_conbini"]
+                
+                if st.button("最適化を実行"):
+                    R = model_params["R"]
+                    M_min = model_params["M_min"]
+                    eligible_indices = [
+                        i for i, dists_from_i in enumerate(all_dists)
+                        if np.sum(all_pops[np.where(dists_from_i <= R)[0]]) >= M_min
+                    ]
+                    
+                    if len(eligible_indices) == 0:
+                        st.error("採算ラインをクリアした候補地が0件です。商圏半径を広げるか、最低商圏内人口を減らしてください。")
+                    else:
+                        eligible_dists = all_dists[np.ix_(eligible_indices, range(len(all_demands)))]
+                        n_eligible = len(eligible_indices)
+                        m_demands = len(all_demands)
+                        
+                        st.info(f"全 {len(all_coords)}件の候補地のうち、採算ラインをクリアしたのは {n_eligible}件です。この中から最適配置を計算します。")
+
+                        with st.expander("最適化問題の詳細", expanded=False):
+                            st.markdown(REGISTRY[model_option]["description"], unsafe_allow_html=True)
+                        
+                        with st.spinner("最適化計算を実行中..."):
+                            opt_func = REGISTRY[model_option]["func"]
+                            
+                            args = ()
+                            if "p-メディアン" in model_option:
+                                args = (n_eligible, m_demands, all_pops, eligible_dists, model_params["N"], model_params["D"])
+                            else: # p-センター
+                                args = (n_eligible, m_demands, eligible_dists, model_params["N"], model_params["D"])
+                            
+                            status, x, y, obj_val = opt_func(*args)
+
+                            if "Optimal" in status or "Feasible" in status:
+                                if "最大徒歩距離" in model_option:
+                                    title = f"最適化結果: {model_option}\n(最大距離: {obj_val:.2f})"
+                                else:
+                                    title = f"最適化結果: {model_option}\n(総距離: {obj_val:,.0f})"
+                                
+                                fig = visualize_optimization_result(all_coords, np.array(eligible_indices), all_demands, all_pops, x, y, all_landmarks, title)
+                                st.session_state["status_conbini"] = status
+                                st.session_state["result_fig_conbini"] = fig
+                            else:
+                                st.error(f"最適化に失敗 (Status: {status})。制約が厳しすぎる可能性があります。")
+                                if "result_fig_conbini" in st.session_state: del st.session_state["result_fig_conbini"]
+
+                if "result_fig_conbini" in st.session_state:
+                    st.success(f"最適化ステータス: **{st.session_state['status_conbini']}**")
+                    st.pyplot(st.session_state["result_fig_conbini"])
+                else:
+                    st.info("「最適化を実行」ボタンを押して計算を開始してください。")
         else:
             st.warning("先に左側の「データを生成・表示」ボタンでデータを生成してください。")
 
