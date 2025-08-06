@@ -81,11 +81,11 @@ DESC_PARK_MAX_DIST = """
 - $x_i$: 候補地$i$に公園を設置する場合 1, しない場合 0
 - $y_{ij}$: 需要地$j$の住民が公園$i$を利用する割合 (0~1)
 - $z_{ij}$: 需要地$j$が公園$i$を利用可能な場合 1, そうでない場合 0
-- $T$: 最大利用距離
+- $H$: 最大利用距離
 
 #### 定式化
 **目的関数: 最大移動距離の最小化**
-$$\\text{Minimize} \\quad T$$
+$$\\text{Minimize} \\quad H$$
 
 **制約条件:**
 1. **住民の割り当て**: 全ての需要地の住民がいずれかの公園を利用する
@@ -93,11 +93,11 @@ $$\\text{Minimize} \\quad T$$
 2. **収容人数（上限）**: 公園の利用人数は、最大受け入れ人数を超えてはならない
    $$\\sum_{j \\in J} p_j y_{ij} \\leq c_i^u \\quad (\\forall i \\in I)$$
 3. **最低利用人数**: 公園を設置する場合、最低利用人数を満たさなければならない
-   $$\\sum_{j \\in J} p_j y_{ij} \\geq c_i^l x_i \\quad (\\forall i \\in I)$$
+   $$\\sum_{j \\in J} p_j y_{ij} \\geq c_i^l \\quad (\\forall i \\in I)$$
 4. **設置と利用の関係**: 公園が設置されている場合のみ、その公園は利用可能
    $$y_{ij} \\leq z_{ij}, \\quad z_{ij} \\leq x_i \\quad (\\forall i \\in I, \\forall j \\in J)$$
-5. **最大移動距離**: 全ての住民の移動距離は$T$以下でなければならない
-   $$d_{ij} z_{ij} \\leq T \\quad (\\forall i \\in I, \\forall j \\in J)$$
+5. **最大移動距離**: 全ての住民の移動距離は$H$以下でなければならない
+   $$d_{ij} z_{ij} \\leq H \\quad (\\forall i \\in I, \\forall j \\in J)$$
 """
 
 def optimize_max_dist(
@@ -110,9 +110,10 @@ def optimize_max_dist(
     x = pulp.LpVariable.dicts("x", range(n), cat=pulp.LpBinary)
     y = pulp.LpVariable.dicts("y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous)
     z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
-    T = pulp.LpVariable("T", lowBound=0, cat=pulp.LpContinuous)
+    # 修正点1: 変数名をTからHに変更
+    H = pulp.LpVariable("H", lowBound=0, cat=pulp.LpContinuous)
     
-    model += T
+    model += H
     
     for j in range(m):
         model += pulp.lpSum(y[i][j] for i in range(n)) == 1
@@ -120,18 +121,22 @@ def optimize_max_dist(
     for i in range(n):
         total_users = pulp.lpSum(p[j] * y[i][j] for j in range(m))
         model += total_users <= c_phy[i]
-        model += total_users >= c_low[i] * x[i]
+        model += total_users >= c_low[i]
+
+    
         
         for j in range(m):
             model += y[i][j] <= z[i][j]
             model += z[i][j] <= x[i]
-            model += d[i][j] * z[i][j] <= T
+            # 修正点1: 制約式内の変数名をTからHに変更
+            model += d[i][j] * z[i][j] <= H
             
     model.solve(pulp.PULP_CBC_CMD(msg=0))
     status = pulp.LpStatus[model.status]
     x_sol = {i: x[i] for i in range(n)}
     y_sol = {(i, j): y[i][j] for i in range(n) for j in range(m)}
-    return status, x_sol, y_sol, T.value() if T.value() is not None else -1.0
+    # 修正点1: 戻り値の変数名をTからHに変更
+    return status, x_sol, y_sol, H.value() if H.value() is not None else -1.0
 
 def visualize_initial_data(
     candidate_coords: np.ndarray, demand_coords: np.ndarray, demand_populations: np.ndarray,
@@ -201,13 +206,10 @@ def get_data_generation_params():
     st.subheader("公園候補地の生成")
     grid_resolution = st.slider("候補地生成グリッドの解像度", 5, 30, 10, help="高いほど候補地が多くなります。")
 
-    # 敷地面積に関する設定を削除
     return area_size, grid_resolution, landmark_counts, m, seed
 
 def get_model_parameters(n_parks):
     st.header("最適化モデルのパラメータ")
-    
-    # D と s_req の設定を削除
     
     with st.expander(f"公園ごとの収容人数を設定 ({n_parks}件)", expanded=True):
         c_low_list = []
@@ -215,10 +217,12 @@ def get_model_parameters(n_parks):
         for i in range(n_parks):
             cols = st.columns(2)
             with cols[0]:
-                c_low = st.number_input(f"候補地 {i} の最小収容人数", 0, value=20, key=f"clow_{i}")
+                # 修正点2: 最小収容人数のデフォルト値を10に変更
+                c_low = st.number_input(f"候補地 {i} の最小収容人数", 0, value=10, key=f"clow_{i}")
                 c_low_list.append(c_low)
             with cols[1]:
-                c_phy = st.number_input(f"候補地 {i} の最大収容人数", 0, value=300, key=f"cphy_{i}")
+                # 修正点2: 最大収容人数のデフォルト値を100に変更
+                c_phy = st.number_input(f"候補地 {i} の最大収容人数", 0, value=100, key=f"cphy_{i}")
                 c_phy_list.append(c_phy)
 
     return {"c_low_list": c_low_list, "c_phy_list": c_phy_list}
@@ -238,12 +242,10 @@ def main():
     with col1:
         st.header("📍 初期データ")
         if st.button("データを生成・表示"):
-            # generate_park_data の戻り値を修正
             data = generate_park_data(area_size, grid_res, landmark_counts, m, seed)
             if data[0].shape[0] > 0:
                 st.session_state["data_park"] = data
                 candidate_coords, demand_coords, p, d, landmarks = data
-                # visualize_initial_data の引数を修正
                 fig = visualize_initial_data(candidate_coords, demand_coords, p, landmarks)
                 st.session_state["initial_fig_park"] = fig
                 st.success(f"データ生成完了！ (公園候補地: {len(data[0])}件)")
@@ -262,28 +264,23 @@ def main():
         if "data_park" in st.session_state:
             n_actual = len(st.session_state["data_park"][0])
             with st.sidebar:
-                # get_model_parameters の戻り値を修正
                 model_params = get_model_parameters(n_actual)
 
             if st.button("最適化を実行"):
                 with st.expander("最適化問題の詳細", expanded=False):
                     st.markdown(DESC_PARK_MAX_DIST, unsafe_allow_html=True)
                 with st.spinner("最適化計算を実行中..."):
-                    # session_stateから取得するデータを修正
                     candidate_coords, demand_coords, p, d, landmarks = st.session_state["data_park"]
                     n, m = len(candidate_coords), len(demand_coords)
                     
-                    # UIから最大・最小収容人数を取得
                     c_low = np.array(model_params["c_low_list"])
                     c_phy = np.array(model_params["c_phy_list"])
                     
-                    # optimizerの引数を修正
                     status, x, y, result_value = optimize_max_dist(n, m, p, c_phy, c_low, d)
 
                     if "Optimal" in status or "Feasible" in status:
                         title = f"最適化結果: 最大利用距離の最小化\n(最大距離: {result_value:.2f})"
                         
-                        # visualize_optimization_result の引数を修正
                         fig = visualize_optimization_result(candidate_coords, demand_coords, p, x, y, landmarks, title)
                         st.session_state["status_park"] = status
                         st.session_state["result_fig_park"] = fig
