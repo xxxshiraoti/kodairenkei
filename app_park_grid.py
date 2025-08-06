@@ -128,7 +128,6 @@ def optimize_max_dist(
         "y", (range(n), range(m)), lowBound=0, upBound=1, cat=pulp.LpContinuous
     )
     z = pulp.LpVariable.dicts("z", (range(n), range(m)), cat=pulp.LpBinary)
-    # 修正点1: 変数名をTからHに変更
     H = pulp.LpVariable("H", lowBound=0, cat=pulp.LpContinuous)
 
     model += H
@@ -144,14 +143,12 @@ def optimize_max_dist(
         for j in range(m):
             model += y[i][j] <= z[i][j]
             model += z[i][j] <= x[i]
-            # 修正点1: 制約式内の変数名をTからHに変更
             model += d[i][j] * z[i][j] <= H
 
     model.solve(pulp.PULP_CBC_CMD(msg=0))
     status = pulp.LpStatus[model.status]
     x_sol = {i: x[i] for i in range(n)}
     y_sol = {(i, j): y[i][j] for i in range(n) for j in range(m)}
-    # 修正点1: 戻り値の変数名をTからHに変更
     return status, x_sol, y_sol, H.value() if H.value() is not None else -1.0
 
 
@@ -245,7 +242,7 @@ def visualize_optimization_result(
             )
             ax.scatter(
                 coord[0], coord[1], c="red", s=150, alpha=0.8, marker="s", edgecolors="black"
-            )  # サイズを固定値に変更
+            )
             ax.text(
                 coord[0],
                 coord[1] - 3,
@@ -254,7 +251,7 @@ def visualize_optimization_result(
                 ha="center",
                 va="top",
                 bbox=dict(facecolor="white", alpha=0.5, edgecolor="none"),
-            )  # 面積表示を削除
+            )
         else:
             ax.scatter(coord[0], coord[1], c="gray", s=20, alpha=0.4, marker="s")
     ax.scatter(
@@ -313,11 +310,9 @@ def get_model_parameters(n_parks):
         for i in range(n_parks):
             cols = st.columns(2)
             with cols[0]:
-                # 修正点2: 最小収容人数のデフォルト値を10に変更
                 c_low = st.number_input(f"候補地 {i} の最小収容人数", 0, value=10, key=f"clow_{i}")
                 c_low_list.append(c_low)
             with cols[1]:
-                # 修正点2: 最大収容人数のデフォルト値を100に変更
                 c_phy = st.number_input(
                     f"候補地 {i} の最大収容人数", 0, value=100, key=f"cphy_{i}"
                 )
@@ -350,17 +345,19 @@ def main():
                 st.error(
                     "候補地が0件になりました。グリッド解像度を上げるか、ランドマークの影響を調整してください。"
                 )
-                if "initial_fig_park" in st.session_state:
-                    del st.session_state["initial_fig_park"]
+                st.session_state["initial_fig_park"] = None
 
-        if "initial_fig_park" in st.session_state:
+        if (
+            "initial_fig_park" in st.session_state
+            and st.session_state["initial_fig_park"] is not None
+        ):
             st.pyplot(st.session_state["initial_fig_park"])
         else:
             st.info("「データを生成・表示」ボタンを押してシミュレーションを開始してください。")
 
     with col2:
         st.header("📈 最適化結果")
-        if "data_park" in st.session_state:
+        if "data_park" in st.session_state and st.session_state["data_park"][0].shape[0] > 0:
             n_actual = len(st.session_state["data_park"][0])
             with st.sidebar:
                 model_params = get_model_parameters(n_actual)
@@ -391,10 +388,12 @@ def main():
                         st.error(
                             f"最適化に失敗 (Status: {status})。制約が厳しすぎる可能性があります。"
                         )
-                        if "result_fig_park" in st.session_state:
-                            del st.session_state["result_fig_park"]
+                        st.session_state["result_fig_park"] = None
 
-            if "result_fig_park" in st.session_state:
+            if (
+                "result_fig_park" in st.session_state
+                and st.session_state["result_fig_park"] is not None
+            ):
                 st.success(f"最適化ステータス: **{st.session_state['status_park']}**")
                 st.pyplot(st.session_state["result_fig_park"])
             else:
