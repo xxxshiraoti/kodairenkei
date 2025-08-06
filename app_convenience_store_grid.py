@@ -281,6 +281,31 @@ def visualize_optimization_result(
     ax.scatter([], [], c="gray", s=50, label="設置されなかった候補地", alpha=0.5, marker="s")
     ax.scatter([], [], c="blue", s=100, label="住民グループ (人口)", alpha=0.6)
 
+    # --- 変更点：ここから ---
+    # 各店舗の集客人数を計算・表示
+    for i_global in range(len(all_candidate_coords)):
+        if i_global in eligible_indices:
+            local_idx = list(eligible_indices).index(i_global)
+            if x.get(local_idx, 0) > 0.5:
+                # この店舗に割り当てられた総人口を計算
+                total_population = sum(
+                    y.get((local_idx, j), 0) * demand_populations[j]
+                    for j in range(len(demand_populations))
+                )
+                coord = all_candidate_coords[i_global]
+                ax.text(
+                    coord[0],
+                    coord[1] - 2.0,
+                    f"集客: {total_population:.0f}人",
+                    fontsize=9,
+                    ha="center",
+                    va="top",
+                    color="maroon",
+                    weight="bold",
+                    bbox=dict(boxstyle="round,pad=0.2", fc="yellow", alpha=0.5),
+                )
+    # --- 変更点：ここまで ---
+
     for i in range(len(all_candidate_coords)):
         coord = all_candidate_coords[i]
         if i in eligible_indices:
@@ -304,7 +329,27 @@ def visualize_optimization_result(
         else:
             ax.scatter(coord[0], coord[1], c="lightgray", s=50, alpha=0.8, marker="x")
 
-    ax.scatter(demand_coords[:, 0], demand_coords[:, 1], c="blue", s=demand_populations, alpha=0.6)
+    ax.scatter(
+        demand_coords[:, 0],
+        demand_coords[:, 1],
+        c="blue",
+        s=demand_populations,
+        alpha=0.6,
+        zorder=3,
+    )
+
+    for j, coord in enumerate(demand_coords):
+        ax.text(
+            coord[0],
+            coord[1] + 1.5,
+            f"{demand_populations[j]}人",
+            fontsize=8,
+            ha="center",
+            va="bottom",
+            color="darkblue",
+            weight="bold",
+        )
+
     for (i_local, j), assignment_ratio in y.items():
         if assignment_ratio > 1e-6:
             i_global = eligible_indices[i_local]
@@ -358,6 +403,7 @@ def main() -> None:
         page_title="コンビニ配置 最適化シミュレーター", page_icon="🏪", layout="wide"
     )
     st.title("🏪 コンビニ配置 最適化シミュレーター")
+    st.markdown("ご提示の数理モデルに厳密に準拠し、採算性を考慮した最適化計算を実行します。")
 
     with st.sidebar:
         st.title("⚙️ 設定")
@@ -426,7 +472,11 @@ def main() -> None:
                         f"全 {len(all_coords)}件の候補地のうち、採算ラインをクリアしたのは {n_eligible}件です。この中から最適配置を計算します。"
                     )
 
-                    with st.expander("最適化問題の詳細", expanded=False):
+                    # --- 変更点：ここから ---
+                    # 「最大移動距離を最小化」モデルが選択された場合、詳細をデフォルトで表示
+                    show_details_expanded = "最大移動距離" in model_option
+                    with st.expander("最適化問題の詳細", expanded=show_details_expanded):
+                        # --- 変更点：ここまで ---
                         st.markdown(REGISTRY[model_option]["description"], unsafe_allow_html=True)
 
                     with st.spinner("最適化計算を実行中..."):
