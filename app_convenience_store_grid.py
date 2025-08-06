@@ -358,7 +358,6 @@ def main() -> None:
         page_title="コンビニ配置 最適化シミュレーター", page_icon="🏪", layout="wide"
     )
     st.title("🏪 コンビニ配置 最適化シミュレーター")
-    st.markdown("ご提示の数理モデルに厳密に準拠し、採算性を考慮した最適化計算を実行します。")
 
     with st.sidebar:
         st.title("⚙️ 設定")
